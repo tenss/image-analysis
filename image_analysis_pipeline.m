@@ -1,10 +1,11 @@
 %% first lets load the image stack
 
 % to do this, we will use the TIFFStack class (which you can find on 
-% github). TIFFStack provides a convinient way to access multiframe TIFFs
-% without having to load the entire file into memory. frames get read from
-% disk only when we actually request the data, which is convenient when
-% working with stacks that may be many gigabytes in size.
+% GitHub: https://github.com/DylanMuir/TIFFStack). TIFFStack provides a 
+% convenient way to access large multi-frame TIFFs without having to load 
+% the entire file into memory. Frames get read from disk only when we 
+% actually request the data, which is convenient when working with stacks 
+% that may be many gigabytes in size.
 
 stackpath = 'retinotopy_00002_00001.tif';
 stack = TIFFStack(stackpath);
@@ -79,7 +80,7 @@ subplot(1,2,2);
 imagesc(avgreg), colormap(gray), axis equal off, caxis([offset 1e3]);
 
 %%
-% select some rois using a simple gui
+% select some ROIs using a simple GUI
 RoiMaker(avgreg);
 
 %%

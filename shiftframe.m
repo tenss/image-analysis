@@ -1,9 +1,26 @@
 function trframe = shiftframe(frame, sx, sy)
-% translate a frame by filling an output frame subregion with the input
+% Fast frame translation
+% 
+% function trFrame = shiftframe(frame, sx, sy)
+%
+% 
+% Purpose
+% Translate a frame by filling an output frame subregion with the input
 % frame, which is faster than imstranslate or imdilate-based translation,
 % for integer shifts
-
-% adapted from Maxime Rio, 2017
+%
+%
+% Inputs
+% frame - the frame to shift
+% sx - x shift
+% sy - y shift
+%
+%
+% Outputs
+% trFrame - the translated frame. 
+%
+%
+% Adapted from Maxime Rio, 2017
 
 % preallocated result
 trframe = zeros(size(frame), 'like', frame);

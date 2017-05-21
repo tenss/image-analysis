@@ -1,5 +1,26 @@
 function xyshifts = dftregister(fft_template, fft_frame, maxshift)
 % register a frame using Kuglin and Hines phase correlation method
+%
+% function xyShifts = dftregister(fft_template, fft_frames, maxShift)
+%
+%
+% Purpose
+% Calculate the x/y translation shift between one or more frames and a template frame. 
+%
+%
+% Inputs
+% fft_template - The template (fixed) 2-D image to which we will register fft_frames.
+% fft_frames - One more more (moving) frames that will be registered to the template
+% maxShift - Shifts larger than "maxShift" pixels are not allowed. If empty, no 
+%            maximum shift constraint is applied.
+% 
+% Outputs
+% xyShifts - An array of shifts. First row are x shifts and second row y shifts. 
+% 
+%
+% Adapted from Maxime Rio, 2017
+
+
 
 % weighting coefficient to balance between phase correlation (alpha = 1)
 % and normal correlation (alpha = 0, no normalization)

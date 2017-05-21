@@ -1,5 +1,23 @@
 classdef RoiMaker < handle
-    % A simple GUI to interactively place elliptical ROIs on an image
+
+
+    % A simple class that makes a GUI to interactively place elliptical ROIs on an image
+    %
+    %
+    % Run using: 
+    % >>  RoiMaker(2D_imageData);
+    %
+    % e.g.
+    % >>  RoiMaker(rand(256));
+    %
+    % - Then click "Add ROI" to draw an ellipse 
+    % - Modify ellipse shape and size if desired
+    % - Double-click to confirm the ROI
+    % - Optionally add more ROIs
+    % - Hit "Export and exit" to quit
+    % - ROIs will be saved to base workspace
+
+
     properties
         fig         % figure containing the gui
         ax          % axis object for the image
@@ -11,12 +29,13 @@ classdef RoiMaker < handle
         
         addroipb    % pushbutton for adding rois
         exitpb      % pushbutton to export rois and exit
-    end
-    
+    end % close properties block
+
+
     methods
         function obj = RoiMaker(im)
-            % this is the constructor method of the RoiMaker class
-            % it gets called whenever an instance of the class is created
+            % This is the constructor method of the RoiMaker class, it gets 
+            % called whenever an instance of the class is created.
             obj.rois = struct('footprint',{});
             obj.im = mat2gray(im) * 3;
 
@@ -64,14 +83,19 @@ classdef RoiMaker < handle
             % update overlay display
             obj.overlay(mask) = .3;
             obj.hoverlay.AlphaData = obj.overlay;
-        end
-        
+        end % close add_roi
+
         function obj = export_and_exit(obj, src, events)
-            % assign rois to the base workspace and close
+            % assign ROIs to the base workspace and close the figure window
             assignin('base', 'rois', obj.rois);
             close(obj.fig);
         end
     end
 end
-            
-            
+
+            close(obj.fig)
+        end % close export_and_exit
+
+    end % close methods block
+
+end % close classdef
