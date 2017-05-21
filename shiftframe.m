@@ -1,4 +1,4 @@
-function trframe = shiftframe(frame, sx, sy)
+function trFrame = shiftframe(frame, sx, sy)
 % Fast frame translation
 % 
 % function trFrame = shiftframe(frame, sx, sy)
@@ -22,10 +22,11 @@ function trframe = shiftframe(frame, sx, sy)
 %
 % Adapted from Maxime Rio, 2017
 
+
 % preallocated result
-trframe = zeros(size(frame), 'like', frame);
+trFrame = zeros(size(frame), 'like', frame);
 
 % fill part of output frame with input frame
 [nx, ny, ~] = size(frame);
-trframe(max(1, 1+sx):min(nx, nx+sx), max(1, 1+sy):min(ny, ny+sy), :) = ...
+trFrame(max(1, 1+sx):min(nx, nx+sx), max(1, 1+sy):min(ny, ny+sy), :) = ...
     frame(max(1, 1-sx):min(nx-sx, nx), max(1, 1-sy):min(ny-sy, ny), :);

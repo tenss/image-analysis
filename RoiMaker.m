@@ -23,12 +23,12 @@ classdef RoiMaker < handle
         ax          % axis object for the image
         im          % supplied image data
         overlay     % roi position overlay
-        him         % handle for the image object
-        hoverlay    % handle for the overlay object
+        hIm         % handle for the image object
+        hOverlay    % handle for the overlay object
         rois        % array of roi structures with masks
-        
-        addroipb    % pushbutton for adding rois
-        exitpb      % pushbutton to export rois and exit
+
+        addROI_pb   % pushbutton for adding rois
+        exit_pb     % pushbutton to export rois and exit
     end % close properties block
 
 
@@ -40,54 +40,57 @@ classdef RoiMaker < handle
             obj.im = mat2gray(im) * 3;
 
             obj.fig = figure;
-            
+
             obj.overlay = zeros(size(obj.im));
-            
-            obj.ax = axes('Position', [0 .1 1 .9]);
-            obj.him = imshow(obj.im); hold on;
-            
-            imred = zeros(size(im,1), size(im,2), 3);
-            imred(:,:,1) = 1;
-            obj.hoverlay = imshow(imred);
-            obj.hoverlay.AlphaData = obj.overlay;  
-            
-            axis equal off;
-            
+
+            obj.ax = axes('Position', [0, 0.1, 1, 0.9]);
+            obj.hIm = imshow(obj.im);
+            hold on
+
+            imRed = zeros(size(im,1), size(im,2), 3);
+            imRed(:,:,1) = 1;
+            obj.hOverlay = imshow(imRed);
+            obj.hOverlay.AlphaData = obj.overlay;
+
+            axis equal off
+
             % we draw pushbuttons and define the callback functions,
             % which will be called whenever the button is clicked
-            obj.addroipb = uicontrol('Style', 'pushbutton', ...
-                'String', 'Add ROI',...
-                'Units', 'normalized',...
-                'Position', [0 0 .3 .1],...
+            obj.addROI_pb = uicontrol('Style', 'pushbutton', ...
+                'String', 'Add ROI', ...
+                'Units', 'normalized', ...
+                'Position', [0, 0, 0.3, 0.1], ...
                 'Callback', @obj.add_roi);
-            
-            obj.exitpb = uicontrol('Style', 'pushbutton', ...
-                'String', 'Export and exit',...
-                'Units', 'normalized',...
-                'Position', [0.7 0 .3 .1],...
+
+            obj.exit_pb = uicontrol('Style', 'pushbutton', ...
+                'String', 'Export and exit', ...
+                'Units', 'normalized', ...
+                'Position', [0.7, 0, 0.3, 0.1], ...
                 'Callback', @obj.export_and_exit);
         end
-        
+
         function obj = add_roi(obj, src, events)
             % create a draggable ellipse
-            hroi = imellipse(obj.ax);
+            hRoi = imellipse(obj.ax);
+
             % wait for user to double click
-            wait(hroi);
+            wait(hRoi);
 
             if ~isvalid(hRoi)
                 % Do not proceed if user failed to double-click
                 return
             end
             % retrieve a mask defined by the boundaries of the ellipse
-            mask = createMask(hroi, obj.him);
-            delete(hroi);   % get rid of it
+            mask = createMask(hRoi, obj.hIm);
+            delete(hRoi) % get rid of it
+
             % add a new roi to store the mask
             nRois = numel(obj.rois);
             obj.rois(nRois+1) = struct('footprint', sparse(mask));
-            
+
             % update overlay display
-            obj.overlay(mask) = .3;
-            obj.hoverlay.AlphaData = obj.overlay;
+            obj.overlay(mask) = 0.3;
+            obj.hOverlay.AlphaData = obj.overlay;
         end % close add_roi
 
         function obj = export_and_exit(obj, src, events)
