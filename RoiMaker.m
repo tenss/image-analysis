@@ -73,6 +73,11 @@ classdef RoiMaker < handle
             hroi = imellipse(obj.ax);
             % wait for user to double click
             wait(hroi);
+
+            if ~isvalid(hRoi)
+                % Do not proceed if user failed to double-click
+                return
+            end
             % retrieve a mask defined by the boundaries of the ellipse
             mask = createMask(hroi, obj.him);
             delete(hroi);   % get rid of it
@@ -87,11 +92,13 @@ classdef RoiMaker < handle
 
         function obj = export_and_exit(obj, src, events)
             % assign ROIs to the base workspace and close the figure window
-            assignin('base', 'rois', obj.rois);
-            close(obj.fig);
-        end
-    end
-end
+            if length(obj.rois)<1
+                fprintf('No ROIs selected\n')
+            else
+                baseVarName='rois';
+                fprintf('Assigning %d ROIs to base workspace variable "%s"\n', length(obj.rois), baseVarName)
+                assignin('base', baseVarName, obj.rois)
+            end
 
             close(obj.fig)
         end % close export_and_exit
