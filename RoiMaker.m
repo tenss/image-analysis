@@ -55,7 +55,7 @@ classdef RoiMaker < handle
             axis equal off
 
             % we draw pushbuttons and define the callback functions,
-            % which will be called whenever the button is clicked
+            % which will be called whenever the buttons are clicked
             obj.addROI_pb = uicontrol('Style', 'pushbutton', ...
                 'String', 'Add ROI', ...
                 'Units', 'normalized', ...
@@ -77,7 +77,7 @@ classdef RoiMaker < handle
             wait(hRoi);
 
             if ~isvalid(hRoi)
-                % Do not proceed if user failed to double-click
+                % do not proceed if user failed to double-click
                 return
             end
             % retrieve a mask defined by the boundaries of the ellipse
@@ -99,7 +99,8 @@ classdef RoiMaker < handle
                 fprintf('No ROIs selected\n')
             else
                 baseVarName='rois';
-                fprintf('Assigning %d ROIs to base workspace variable "%s"\n', length(obj.rois), baseVarName)
+                fprintf('Assigning %d ROIs to base workspace variable "%s"\n', ...
+                    length(obj.rois), baseVarName)
                 assignin('base', baseVarName, obj.rois)
             end
 
