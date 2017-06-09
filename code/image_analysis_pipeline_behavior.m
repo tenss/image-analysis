@@ -211,18 +211,68 @@ end
 %%
 % align a cell to licks
 lickFrames = cat(1,trials.lickFrames);
-cueFrames = [trials.cueStartFrame];
+rewardFrames = [trials.rewardFrame]';
+rewardFrames = rewardFrames(~isnan(rewardFrames));
+
+punishFrames = [trials.punishFrame]';
+punishFrames = punishFrames(~isnan(punishFrames));
+
+unrewardedCues = cueStartFrames([trials.trialType]==0);
+rewardedCues = cueStartFrames([trials.trialType]==1);
 
 % time window for aligning licks
-window = [-19:30];
+window = [-19:40];
 
 % only use licks that are at least 10 frames apart - to differentiate lick
 % onsets and bouts
 lickFrames = lickFrames([true; diff(lickFrames)>10]);
 
 % align dfof response of a the cell to lick events
-cellInd = 14;
+cellInd = 15;
+clim = [0 3];
 lickResp = aligntrace(rois(cellInd).dfof, lickFrames, window);
 
+rewardResp = aligntrace(rois(cellInd).dfof, rewardFrames, window);
+
+punishResp = aligntrace(rois(cellInd).dfof, punishFrames, window);
+
+rewardedCueResp = aligntrace(rois(cellInd).dfof, rewardedCues, window);
+unrewardedCueResp = aligntrace(rois(cellInd).dfof, unrewardedCues, window);
+
 % ta-da!
-figure, imagesc(lickResp)
+figure
+subplot(1,5,1), imagesc(unrewardedCueResp)
+hold on, line(repmat(find(window==0),2,1), [0 numel(unrewardedCues)], 'Color', 'w');
+set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
+    'TickDir', 'out');
+xlabel('Time from tone A')
+caxis(clim)
+
+subplot(1,5,2), imagesc(rewardedCueResp)
+hold on, line(repmat(find(window==0),2,1), [0 numel(rewardedCues)], 'Color', 'w');
+set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
+    'TickDir', 'out');
+xlabel('Time from tone B');
+caxis(clim)
+
+subplot(1,5,3), imagesc(rewardResp)
+hold on, line(repmat(find(window==0),2,1), [0 numel(rewardFrames)], 'Color', 'w');
+set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
+    'TickDir', 'out');
+xlabel('Time from reward');
+caxis(clim)
+
+subplot(1,5,4), imagesc(punishResp)
+hold on, line(repmat(find(window==0),2,1), [0 numel(punishFrames)], 'Color', 'w');
+set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
+    'TickDir', 'out');
+xlabel('Time from punishment');
+caxis(clim)
+
+subplot(1,5,5), imagesc(lickResp)
+hold on, line(repmat(find(window==0),2,1), [0 numel(lickFrames)], 'Color', 'w');
+set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
+    'TickDir', 'out');
+xlabel('Time from lick onset');
+caxis(clim)
+
