@@ -157,7 +157,7 @@ rois = rois(~emptyIdx);
 %%
 % lets look at the activity of a single ROI
 figure
-cellInd = 1;
+cellInd = 2;
 subplot(1,2,1), plot(rois(cellInd).activity)
 
 % as with the image offset, we can use a GMM to estimate f0
@@ -193,7 +193,7 @@ trials = loadbpod('tenss1_TwoTonePavlovianGoNoGo_Jun09_2017_Session5.mat');
 cueTimes = reshape([trials.cueTimes], 2, [])';
 
 % determine the frame rate on the arduino clock
-b = regress(cueTimes(:,1), [ones(size(trialStartFrames)) trialStartFrames]);
+b = regress(cueTimes(:,1), [ones(size(cueStartFrames)) cueStartFrames]);
 ifi = b(2);
 frameRate = 1/ifi;
 
@@ -228,8 +228,8 @@ window = [-19:40];
 lickFrames = lickFrames([true; diff(lickFrames)>10]);
 
 % align dfof response of a the cell to lick events
-cellInd = 15;
-clim = [0 3];
+cellInd = 19;
+clim = [0 1];
 lickResp = aligntrace(rois(cellInd).dfof, lickFrames, window);
 
 rewardResp = aligntrace(rois(cellInd).dfof, rewardFrames, window);
