@@ -33,11 +33,16 @@ classdef RoiMaker < handle
 
 
     methods
-        function obj = RoiMaker(im)
+        function obj = RoiMaker(im, range)
             % This is the constructor method of the RoiMaker class, it gets 
             % called whenever an instance of the class is created.
             obj.rois = struct('footprint',{});
-            obj.im = mat2gray(im) * 3;
+            
+            im = (im - range(1)) / (range(2) - range(1));
+            im(im<0) = 0;
+            im(im>1) = 1;
+            
+            obj.im = im;
 
             obj.fig = figure;
 
