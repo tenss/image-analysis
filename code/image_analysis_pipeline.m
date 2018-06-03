@@ -26,16 +26,21 @@ whos imStack
 
 %% lets have a look at a single frame of the stack
 figure
+subplot(1,2,1)
 imagesc(imStack(:,:,1))
 colormap(gray)
 axis equal off
+caxis([0 500] + 32768)
+title('single frame')
 
 % compare to mean image stack
 avgStack = mean(imStack, 3);
-figure
+subplot(1,2,2)
 imagesc(avgStack)
 colormap(gray)
+caxis([0 500] + 32768)
 axis equal off
+title('frame average')
 
 %% lets look at some raw pixel values
 frame = imStack(:,:,1);
@@ -69,7 +74,8 @@ plot(range, pdf(gmmodel,range')*10, 'LineWidth', 2);
 
 % we'll use the lowest mean Gaussian as our estimate of the offset
 offset = min(gmmodel.mu);
-
+xlabel('gray level')
+ylabel('density')
 
 %% now let's correct for motion artefacts
 % cropping the images to avoid the visual stimulation artefacts on the edge
@@ -80,19 +86,29 @@ trimPix = 40;
 fft_template = fft2(avgStack(:, trimPix+1:end-trimPix));
 
 xyshifts = zeros(2, nt);
+fprintf('starting registration...\n')
 for ind = 1:nt
      fft_frame = fft2(double(imStack(:, trimPix+1:end-trimPix, ind)));
      xyshifts(:, ind) = dftregister(fft_template, fft_frame, []);
+     if mod(ind,1000)==0
+         fprintf('calculating offset of frame %d...\n', ind)
+     end
 end
 
 % check the frame shifts
-figure, plot(xyshifts');
+figure, plot(xyshifts')
+xlabel('frame number')
+ylabel('pixel shift')
+legend('x shift', 'y shift')
 
 % correct frame shifts
 regStack = zeros(size(imStack), 'uint16');
 for ind = 1:nt
     regStack(:,:,ind) = shiftframe(imStack(:,:,ind), ...
         xyshifts(1,ind), xyshifts(2,ind));
+    if mod(ind,1000)==0
+         fprintf('aligning frame %d...\n', ind)
+     end
 end
 regAvg = mean(regStack,3);
 
@@ -142,34 +158,65 @@ plot([0:1000], pdf(gmmodel,[0:1000]')*10, 'LineWidth', 2);
 
 % loop over ROIs to calculate dF/F
 for ind = 1:numel(rois)
-    gmmodel = fitgmdist(rois(ind).activity', 3, 'Options', options);
+    gmmodel = fitgmdist(rois(ind).activity', 2, 'Options', options);
     rois(ind).f0 = min(gmmodel.mu);
     rois(ind).dfof = (rois(ind).activity-rois(ind).f0) / rois(ind).f0;
 end
 
 %%
 % let's look at the pattern of activity across the population
-figure, subplot(2,2,1);
+figure
 imagesc(cat(1,rois.dfof));
 caxis([0 5])
+xlabel('frames')
+ylabel('cells')
 
-subplot(2,2,3);
-meanAct = mean(cat(1,rois.activity));
-plot(meanAct);
+%%
+rois = makedonuts(rois, 30, 30);
+figure
+subplot(1,2,1)
+imagesc(rois(1).footprint)
+title('ROI mask')
+axis equal off
+colormap gray 
 
+subplot(1,2,2)
+imagesc(rois(1).donut)
+title('neuropil mask')
+axis equal off
+
+% extract neuropil traces for each ROI
+for ind = 1:numel(rois)
+    mask = reshape(rois(ind).donut==1, nx*ny, 1);
+    rois(ind).neuropil = mean(regStack(mask,:)) - offset;
+end
+
+%%
 % why does it look stripy?
 subplot(2,2,4);
-plot(meanAct, rois(14).dfof, '.');
-[b, stats] = robustfit(meanAct, rois(14).dfof);
+plot(rois(14).neuropil, rois(14).activity, '.');
+[b, stats] = robustfit(rois(14).neuropil, rois(14).activity);
 hold on, plot([100 600],[100 600]*b(2) + b(1));
 
 % let's attempt to implement a simple neuropil correction 
 for ind = 1:numel(rois)
-    [~, stats] = robustfit(meanAct, rois(ind).dfof);
-    rois(ind).dfof_corrected = stats.resid';
+    [b, stats] = robustfit(rois(ind).neuropil, rois(ind).activity);
+    rois(ind).activity_corrected = stats.resid' + ...
+        b(2) * median(rois(ind).neuropil);
+    
+    gmmodel = fitgmdist(rois(ind).activity_corrected', 2, ...
+        'Options', options);
+    rois(ind).f0 = min(gmmodel.mu);
+    rois(ind).dfof_corrected = (rois(ind).activity_corrected-rois(ind).f0) ...
+        / rois(ind).f0;
 end
 
 % compare to corrected and uncorrected traces
-subplot(2,2,2);
+subplot(2,2,1)
+plot(rois(2).dfof)
+hold on
+plot(rois(2).dfof_corrected)
+
+subplot(2,2,2)
 imagesc(cat(1,rois.dfof_corrected))
 caxis([0 5])
