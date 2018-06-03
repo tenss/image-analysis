@@ -1,5 +1,8 @@
 function rois = makedonuts(rois, radius, trim)
-
+% Make donut neuropil ROIs around each cell, excluding labeled cells
+% Inputs
+%   rois - structure with original ROIs
+%   radius - 
 cells = zeros(size(rois(1).footprint,1), ...
     size(rois(1).footprint,2));
 
@@ -25,4 +28,5 @@ disk = strel('disk', radius, 8);
 for indR = 1:size(rois,2)
     rois(1,indR).donut = imdilate(full(rois(1,indR).footprint), disk) .* ...
         notCells;
+    rois(1,indR).donut = sparse(rois(1,indR).donut==1);
 end

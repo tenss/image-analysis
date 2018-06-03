@@ -144,7 +144,7 @@ end
 %%
 % lets look at the activity of a single ROI
 figure
-cellInd = 14;
+cellInd = 1;
 subplot(1,2,1), plot(rois(cellInd).activity)
 
 % as with the image offset, we can use a GMM to estimate f0
@@ -172,38 +172,45 @@ xlabel('frames')
 ylabel('cells')
 
 %%
+% make neuropil ROIs around each cell excluding other labeled cells
 rois = makedonuts(rois, 30, 30);
 figure
 subplot(1,2,1)
-imagesc(rois(1).footprint)
+imagesc(rois(2).footprint)
 title('ROI mask')
 axis equal off
 colormap gray 
 
 subplot(1,2,2)
-imagesc(rois(1).donut)
+imagesc(rois(2).donut)
 title('neuropil mask')
 axis equal off
 
 % extract neuropil traces for each ROI
 for ind = 1:numel(rois)
-    mask = reshape(rois(ind).donut==1, nx*ny, 1);
+    mask = reshape(rois(ind).donut, nx*ny, 1);
     rois(ind).neuropil = mean(regStack(mask,:)) - offset;
 end
 
 %%
-% why does it look stripy?
-subplot(2,2,4);
-plot(rois(14).neuropil, rois(14).activity, '.');
-[b, stats] = robustfit(rois(14).neuropil, rois(14).activity);
-hold on, plot([100 600],[100 600]*b(2) + b(1));
+% compare ROI and neuropil fluorescence frame by frame
+figure;
+subplot(1,2,1);
+plot(rois(cellInd).neuropil, rois(cellInd).activity, '.');
+[b, stats] = robustfit(rois(cellInd).neuropil, rois(cellInd).activity);
+hold on, plot([0 300],[0 300]*b(2) + b(1))
+xlim([50 250])
+xlabel('neuropil fluorescence')
+ylabel('ROI fluorescence')
 
 % let's attempt to implement a simple neuropil correction 
 for ind = 1:numel(rois)
+    % estimate correction coefficient
     [b, stats] = robustfit(rois(ind).neuropil, rois(ind).activity);
     rois(ind).activity_corrected = stats.resid' + ...
         b(2) * median(rois(ind).neuropil);
     
+    % reestimate F0 and dF/F
     gmmodel = fitgmdist(rois(ind).activity_corrected', 2, ...
         'Options', options);
     rois(ind).f0 = min(gmmodel.mu);
@@ -212,11 +219,25 @@ for ind = 1:numel(rois)
 end
 
 % compare to corrected and uncorrected traces
-subplot(2,2,1)
-plot(rois(2).dfof)
+subplot(1,2,2)
+plot(rois(cellInd).dfof)
 hold on
-plot(rois(2).dfof_corrected)
+plot(rois(cellInd).dfof_corrected)
+xlabel('frames')
+ylabel('\DeltaF/F')
+legend('raw \DeltaF/F', 'corrected \DeltaF/F')
 
-subplot(2,2,2)
+figure
+subplot(1,2,1)
+imagesc(cat(1,rois.dfof));
+caxis([0 5])
+xlabel('frames')
+ylabel('cells')
+title('raw \DeltaF/F')
+
+subplot(1,2,2)
 imagesc(cat(1,rois.dfof_corrected))
 caxis([0 5])
+xlabel('frames')
+ylabel('cells')
+title('corrected \DeltaF/F')
