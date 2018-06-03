@@ -1,6 +1,9 @@
 # image-analysis
 Examples illustrating basic stages of analyzing calcium imaging data
 
+### Requirements
+We will use the TIFFStack class to load image stacks, which can be found on GitHub: 
+https://github.com/DylanMuir/TIFFStack)
 
 ### Contents
 
