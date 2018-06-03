@@ -31,7 +31,7 @@ colormap(gray)
 axis equal off
 
 % compare to mean image stack
-framesToAverage = 800;
+framesToAverage = 2000;
 avgStack = mean(imStack(:,:,1:2:framesToAverage*2), 3);
 figure
 imagesc(avgStack)
@@ -74,7 +74,7 @@ offset = 0;%min(gmmodel.mu);
 
 %% now let's correct for motion artefacts
 % cropping the images to avoid the visual stimulation artefacts on the edge
-trimPix = 40;
+trimPix = 0;
 % the registration algorithm works in the Fourier domain (look up the 
 % convolution theorem if you want to know why), so we start by computing
 % the 2D Fourier transform of the raw images and registration template
@@ -157,7 +157,7 @@ rois = rois(~emptyIdx);
 %%
 % lets look at the activity of a single ROI
 figure
-cellInd = 2;
+cellInd = 12;
 subplot(1,2,1), plot(rois(cellInd).activity)
 
 % as with the image offset, we can use a GMM to estimate f0
@@ -174,6 +174,10 @@ for ind = 1:numel(rois)
     gmmodel = fitgmdist(rois(ind).activity, 3, 'Options', options);
     rois(ind).f0 = min(gmmodel.mu);
     rois(ind).dfof = (rois(ind).activity-rois(ind).f0) / rois(ind).f0;
+    
+    meanAct = mean(cat(2,rois.activity),2)';
+    [~, stats] = robustfit(meanAct, rois(ind).dfof);
+    rois(ind).dfof_corrected = stats.resid';
 end
 
 
@@ -220,6 +224,12 @@ punishFrames = punishFrames(~isnan(punishFrames));
 unrewardedCues = cueStartFrames([trials.trialType]==0);
 rewardedCues = cueStartFrames([trials.trialType]==1);
 
+lickTrials = arrayfun(@(t) ~isempty(t.lickTimes) && min(t.lickTimes-t.cueTimes(1))<3, trials);
+
+rewardedCuesLick = cueStartFrames([trials.trialType]==1 & lickTrials');
+rewardedCuesNolick = cueStartFrames([trials.trialType]==1 & ~lickTrials');
+unrewardedCuesLick = cueStartFrames([trials.trialType]==0 & lickTrials');
+unrewardedCuesNolick = cueStartFrames([trials.trialType]==0 & ~lickTrials');
 % time window for aligning licks
 window = [-19:40];
 
@@ -227,28 +237,50 @@ window = [-19:40];
 % onsets and bouts
 lickFrames = lickFrames([true; diff(lickFrames)>10]);
 
+figure
+
+
 % align dfof response of a the cell to lick events
-cellInd = 19;
+for cellInd = 1:numel(rois)
+    
 clim = [0 1];
-lickResp = aligntrace(rois(cellInd).dfof, lickFrames, window);
+lickResp = aligntrace(rois(cellInd).dfof_corrected, lickFrames, window);
 
-rewardResp = aligntrace(rois(cellInd).dfof, rewardFrames, window);
+rewardResp = aligntrace(rois(cellInd).dfof_corrected, rewardFrames, window);
 
-punishResp = aligntrace(rois(cellInd).dfof, punishFrames, window);
+punishResp = aligntrace(rois(cellInd).dfof_corrected, punishFrames, window);
 
-rewardedCueResp = aligntrace(rois(cellInd).dfof, rewardedCues, window);
-unrewardedCueResp = aligntrace(rois(cellInd).dfof, unrewardedCues, window);
+rewardedCueResp = aligntrace(rois(cellInd).dfof_corrected, rewardedCues, window);
+rewardedCueLickResp = aligntrace(rois(cellInd).dfof_corrected, rewardedCuesLick, window);
+rewardedCueNolickResp = aligntrace(rois(cellInd).dfof_corrected, rewardedCuesNolick, window);
+
+unrewardedCueResp = aligntrace(rois(cellInd).dfof_corrected, unrewardedCues, window);
+unrewardedCueLickResp = aligntrace(rois(cellInd).dfof_corrected, unrewardedCuesLick, window);
+unrewardedCueNolickResp = aligntrace(rois(cellInd).dfof_corrected, unrewardedCuesNolick, window);
 
 % ta-da!
-figure
-subplot(1,5,1), imagesc(unrewardedCueResp)
+subplot(2,5,1), imagesc(unrewardedCueLickResp)
 hold on, line(repmat(find(window==0),2,1), [0 numel(unrewardedCues)], 'Color', 'w');
 set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
     'TickDir', 'out');
 xlabel('Time from tone A')
 caxis(clim)
 
-subplot(1,5,2), imagesc(rewardedCueResp)
+subplot(2,5,6), imagesc(unrewardedCueNolickResp)
+hold on, line(repmat(find(window==0),2,1), [0 numel(unrewardedCues)], 'Color', 'w');
+set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
+    'TickDir', 'out');
+xlabel('Time from tone A')
+caxis(clim)
+
+subplot(2,5,2), imagesc(rewardedCueLickResp)
+hold on, line(repmat(find(window==0),2,1), [0 numel(rewardedCues)], 'Color', 'w');
+set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
+    'TickDir', 'out');
+xlabel('Time from tone B');
+caxis(clim)
+
+subplot(2,5,7), imagesc(rewardedCueNolickResp)
 hold on, line(repmat(find(window==0),2,1), [0 numel(rewardedCues)], 'Color', 'w');
 set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
     'TickDir', 'out');
@@ -276,3 +308,5 @@ set(gca,'XTick',[20:20:60], 'XTickLabel', num2str(window(20:20:60)'*ifi,2), ...
 xlabel('Time from lick onset');
 caxis(clim)
 
+keyboard;
+end
