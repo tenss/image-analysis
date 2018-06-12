@@ -51,7 +51,7 @@ frame = imStack(:,:,1);
 bins = [-200:10:1000] + 32768; 
 
 figure, histogram(frame(:), bins, 'normalization', 'probability');
-
+%%
 % it is skewed and there is a sharp peak that corresponds to the image
 % offset, which depends on the configuration of the acquisition board and
 % PMT amplifiers
@@ -202,7 +202,7 @@ hold on, plot([0 300],[0 300]*b(2) + b(1))
 xlim([50 250])
 xlabel('neuropil fluorescence')
 ylabel('ROI fluorescence')
-
+%%
 % let's attempt to implement a simple neuropil correction 
 for ind = 1:numel(rois)
     % estimate correction coefficient
@@ -226,7 +226,7 @@ plot(rois(cellInd).dfof_corrected)
 xlabel('frames')
 ylabel('\DeltaF/F')
 legend('raw \DeltaF/F', 'corrected \DeltaF/F')
-
+%%
 figure
 subplot(1,2,1)
 imagesc(cat(1,rois.dfof));
