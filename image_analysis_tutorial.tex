@@ -1,0 +1,270 @@
+\documentclass[a4paper]{report}
+\usepackage{amsmath,mathrsfs}
+\usepackage{mathtools}
+\usepackage{tabularx,booktabs}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{mdframed}
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage[a4paper,margin=2.7cm,tmargin=2.5cm,bmargin=2.5cm]{geometry} 
+\usepackage{tikz}
+\usepackage{listings}
+
+\usepackage{color}
+ 
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.95}
+ 
+\lstdefinestyle{matlab}{
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=matlab}
+
+\usetikzlibrary{bayesnet}
+
+\addtocounter{chapter}{1}
+\makeatletter
+\renewcommand{\thesection}{\@arabic\c@section}
+\renewcommand{\thefigure}{\@arabic\c@figure}
+\makeatother
+
+\newcommand{\nexercise}[0]{\arabic{exercises}\addtocounter{exercises}{1}}
+
+
+
+\begin{document}
+
+\newcounter{exercises}
+\addtocounter{exercises}{1}
+\newmdenv[linewidth=2pt,
+frametitlerule=true,
+roundcorner=10pt,
+linecolor=red,
+leftline=false,
+rightline=false,
+skipbelow=12pt,
+skipabove=12pt,
+nobreak=true,
+innerbottommargin=7pt,
+]{exercisebox}
+
+\begin{center}
+\textbf{\Large{Image analysis}}
+\end{center}	
+\section{Overview}
+In this tutorial we will go through the steps of required to transform images acquired on the microscope into activity traces, which can be used to downstream analyses.
+
+Most functional imaging data sets you will work with in practice will be too large to load into RAM in their entirety. 
+To overcome this problem you can implement your own batch-loading subroutines or use packages such as \texttt{TIFFStack}, which allows you to memory map image files and read them from disk on demand. 
+To use it, we'll create a \texttt{TIFFStack} object by calling the constructor:
+\lstset{emph={TIFFStack}, emphstyle=\color{red}}
+\begin{lstlisting}[language=Octave]
+imStack = TIFFStack(stackpath);
+\end{lstlisting}
+We can then retrieve data by treating the \texttt{TIFFStack} as a regular MATLAB tensor.
+If we want to concatenate multiple stacks, we can do this using \texttt{TensorStack}, which will allow us to access the data transparently:
+\lstset{emph={TensorStack}, emphstyle=\color{red}}
+\begin{lstlisting}[language=Octave]
+% create a TIFFStack for each file
+imgs = cellfun(@(p) TIFFStack(p, false), stackpaths, 'un', false);
+% concatenate TIFFStacks into a single TensorStack
+imStack = TensorStack(3, imgs{:});
+\end{lstlisting}
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Using \texttt{TIFFStack} to memory map image data}]
+Use \texttt{TIFFStack} to load an image stack. Using the \texttt{whos} command check memory usage of the resulting object. 
+Then use \texttt{size} to check the its dimensions (\texttt{TIFFStack} class implements several this and several other functions that can typically use regular matrices as arguments). 
+\end{exercisebox}
+
+\section{Offset calculation}
+As you recall from the discussion on imaging sensors, the acquisition hardware will typically introduce an offset to the signal. 
+As the result the image values will $\neq 0$ even when no light is reaching the sensor. 
+Estimating this offset correctly is important for measuring fluorescence responses accurately. 
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Pixel value distribution}]
+To get an intuition for raw image data, examine a single imaging frame and the distribution of its pixel values.
+\end{exercisebox}
+
+One approach to estimate the offset would be to take the minimum fluorescence value in the image. 
+However, in the absence of light image values will vary around the offset value due to read-out noise and the minimum will underestimate the offset. 
+Therefore, it would be more appropriate to use the mode of the pixel value distribution. 
+To estimate it, we can rely on the fact that in images acquired on a resonant scanning 2p microscope, most pixels contain zero photons. 
+We will fit a Gaussian mixture model (GMM) to the pixel value distribution and use the component with the smallest mean as an estimate of the offset.
+\lstset{emph={fitgmdist}, emphstyle=\color{red}}
+\begin{lstlisting}[language=Octave]
+% fit GMM with 5 Gaussians
+options = statset('MaxIter',1000);
+gmmodel = fitgmdist(double(frame(:)), 5, 'Options', options);
+\end{lstlisting}
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: GMM for offset estimation}]
+Fit a GMM to the pixel value distribution and examine the fit. Is the estimate of the offset sensitive to the number of GMM components used (try 3, 5, or 7)?
+\end{exercisebox}
+
+\section{Motion correction}
+If you scroll through the imaging stack, movement artefacts will be readily apparent.
+While we cannot correct for z-drift offline (unless we acquire fine z-stacks), we can and should identify and correct for translational motion. 
+To do this, we first need to define an image that we are going to use as the reference for registration.
+Typically, we can simply use the mean of the stack as a reference.
+However, if motion is excessive we might have to select a subset of frames where it is managable.
+
+\begin{lstlisting}[language=Octave]
+avgStack = mean(imStack, 3);
+\end{lstlisting}
+
+To estimate X/Y shifts, we will compute the cross-correlation (or more accurately, phase correlation) of individual frames with the reference image.
+It is more computationally efficient to do this in Fourier domain and therefore we will first compute FFTs of the reference image and individual frames, before passing them to the accessory function \texttt{dftregister} to compute the shifts.
+
+\begin{lstlisting}[language=Octave]
+% cropping the images to avoid the visual stimulation artefacts on the edge
+trimPix = 40;
+fft_template = fft2(avgStack(:, trimPix+1:end-trimPix));
+xyshifts = zeros(2, nt);
+for ind = 1:nt
+     fft_frame = fft2(double(imStack(:, trimPix+1:end-trimPix, ind)));
+     xyshifts(:, ind) = dftregister(fft_template, fft_frame, []);
+end
+% correct frame shifts
+regStack = zeros(size(imStack), 'uint16');
+for ind = 1:nt
+    regStack(:,:,ind) = shiftframe(imStack(:,:,ind), ...
+        xyshifts(1,ind), xyshifts(2,ind));
+end
+regAvg = mean(regStack,3);
+\end{lstlisting}
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Motion correction}]
+Compute the reference image and use the phase correlation algorithm to estimate frame shifts for all frames in the stack.
+Plot the resulting shifts to check for registration artefacts.
+Finally, compute the registered stack and compare the mean image before and after registration.
+\end{exercisebox}
+
+\section{Segmentation}
+To proceed, we need to identify regions of interest (ROIs) in the image stack, whose fluorescence we are interested in. 
+In a 2p imaging experiment, these may be neuronal cell bodies, dendritic spines, or axonal boutons. 
+In widefield imaging, these may correspond to olfactory glomeruli or entire cortical areas.
+Cell bodies and dendrites can de detected using automatic segmentation algorithms although they typically require manual curation.
+Today, we will select ROIs manually using a simple GUI implemented by the \texttt{RoiMaker} class.
+We'll start \texttt{RoiMaker} by providing it the mean image after registration and the range of gray values over which to scale the data:
+\lstset{emph={RoiMaker}, emphstyle=\color{red}}
+\begin{lstlisting}[language=Octave]
+% select some ROIs using a simple GUI
+RoiMaker(regAvg, [offset offset+300]);
+\end{lstlisting}
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Defining ROIs}]
+Using \texttt{RoiMaker}, label 30-50 neuronal somata.
+\begin{enumerate}
+\item Click "Add ROI" to draw an ellipse.
+\item Modify ellipse shape and size if desired.
+\item Double-click to confirm the ROI.
+\item Repeat steps 1--3 to add more ROIs.
+\item Hit "Export and exit" to quit - ROIs will be saved to the base workspace.
+\end{enumerate}
+\end{exercisebox}
+
+\section{Activity extraction}
+Once we have identified the ROIs, we need to extract their activity traces. 
+This task is complicated by the fact that the measured fluorescence could be influenced by factors other than neural activity (or Ca$^{2+}$ concentration) of the region of interest. 
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Neuropil contamination}]
+First let us examine the extracted activity traces by plotting the matrix of fluorescence responses as a colormap.
+Next, examine the relationship between fluorescence within an ROI and in the surrounding neuropil. What is the origin of the correlation between them?
+\end{exercisebox}
+
+There are several approaches for dealing with neuropil contamination, the most common involve subtracting the surrounding neuropil fluorescence from each ROI with a scale factor determined by linear regression or hand-picked manually. I will describe the method we have adopted in the Mrsic-Flogel lab, developed by Maxime Rio (Figure \ref{fig:neuropil}). 
+We fit both ROI and surround fluorescence to asymmetric Student-t (ASt) distributions, whose mean was determined by a common neuropil signal contributing to both ROI and surrounding fluorescence:
+\begin{align}
+	f_t^{(r)} &\sim \mathrm{ASt}(\alpha z_t + \mu^{(r)}, \sigma^2) \\
+	f_t^{(n)} &\sim \mathrm{ASt}(z_t + \mu^{(n)}, \sigma^2 / N) \\
+	z_t &\sim \mathcal{N}(0, s^2)
+\end{align}
+Here, $z_t$ is the time-varying neuropil trace, $\alpha$ is the contamination coefficient (constrained between 0 and 1 for the ROI and fixed to 1 for the surround), and $\sigma^2$ determines the scale of the two distributions. 
+The factor $N$ was set to 40, the typical ratio of the areas of surround and ROI masks. 
+The ASt distribution has different degrees of freedom $\nu_1$ and $\nu_2$ for its left and right tails. 
+We set $\nu_1=30$ and $\nu_2=1$, such that the left tail was approximately Gaussian, while the right tail resembled the Cauchy distribution. 
+Thus the model allows for large positive but not negative deviations, consistent with the nature of calcium fluorescence signals.
+
+The advantage of this approach over widely used methods, lies in the use of the ASt distribution to model deviations in both ROI and surround signals. 
+The long right tail of the ASt distribution helps prevent over-estimating the neuropil component for densely active cells. 
+At the same time, the use of the ASt distribution for the surround signal helps account for transient increases in fluorescence arising from unannotated neurites or cell bodies, which could otherwise result in false negative transients in the corrected trace.
+
+The challenge of fitting this model is that the posterior distributions over model parameters, including the neuropil trace $z_t$, cannot be computed exactly. 
+Instead, we use variational Bayesian methods to approximate them. The neuropil corrected fluorescence trace was then estimated as the ``noise'' of the ASt model:
+\begin{equation}
+	f_{t} = f_{t}^{(r)} - \alpha z_t
+\end{equation}
+
+\begin{figure}[b]
+  \centering
+  \tikz{ %
+    \node[latent] (sigma_z) {$s$} ; %
+    \node[latent, right=of sigma_z] (z) {$z_t$} ; %   
+    \node[obs, above right=of z] (f_r) {$f^{(r)}_t$} ; %
+    \node[obs, below right=of z] (f_n) {$f^{(n)}_t$} ; %
+    \node[latent, above right=of f_r] (alpha) {$\alpha$} ; %
+    \node[latent, below right=of f_r] (sigma_f) {$\sigma$} ; %
+    \node[latent, right=of f_r] (mu_r) {$\mu^{(r)}$} ; %
+    \node[latent, right=of f_n] (mu_n) {$\mu^{(n)}$} ; %
+    \plate[inner sep=0.25cm, xshift=-0.04cm, yshift=0.12cm] {plate1} {(z) (f_n) (f_r)} {N}; %
+    \edge {sigma_z} {z} ; %  
+    \edge {z, sigma_f, mu_n} {f_n} ; %
+    \edge {z, sigma_f, mu_r} {f_r} ; %
+	\edge {alpha, z} {f_r} ; %    
+  }
+  \caption{Probabilistic graphical model for neuropil contamination.}
+  \label{fig:neuropil}
+\end{figure}
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Neuropil correction}]
+Fit the ASt model to ROIs you have selected.
+Compare the neuropil trace to the shared component estimated by the model.
+
+Plotting activity across ROIs as a colormap, compare responses before and after neuropil correction.
+\end{exercisebox}
+
+\section{End-to-end pipelines}
+The approach describe above is 
+The idea is to recast the problem of segmentation and activity extraction as a fitting latent variable model, where fluorescence in the imaging stack arises as the sum of number of spatially localized sources with different fluorescence time courses.
+
+\section{Next steps - interpreting responses}
+The space of downstream analyses you could do with calcium imaging data is vast and limited only by your creativity. For the purposes of this summer school, we'll cover two widely used approaches for characterizing neural responses. 
+We are going to focus on methods of that seek to identify the factors contributing to responses of single neurons or regions of interest. 
+Essentially, the task we will aim to solve is that of modeling neuronal responses as a function of experimental variables. 
+We will not cover population level analyses and decoding methods that address the reverse problem of reconstructing sensory or behavioral variables from neural data. 
+You'll be provided with example datasets to try out the analyses. However, you are strongly encouraged to try to analyse the data you've collected during the summer school for your presentations.
+
+\subsection{Measuring ``tuning''}
+The first data set you will be provided with is a two-photon calcium imaging experiment in mouse V1. 
+During the experiment, awake mice were presented with drifting gratings of different directions, as well as spatial and temporal frequency.
+Your goal is to extract responses of single cells and visualize their tuning for visual stimulus properties.
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: 2P data pre-processing}]
+Using the analysis pipeline introduced above, extract activity of individual ROIs in from the image stack. 
+Since not all V1 neurons robustly respond to visual stimuli, make sure you select 30-50 cells to get a good sample.
+
+Carry out the steps of motion corrections, segmentation, and activity extraction.
+Visualize population activity my plotting the response matrix as a colormap.
+\end{exercisebox}
+
+\subsection{Linear encoding models}
+Often, the experimental variables whose impact on neural activity we would like to quantify are continuous and multiple factors might contribute to responses at the same time. 
+In these situations we often would like to disambiguate the effects of different experimental variables from each other. 
+\end{document}
