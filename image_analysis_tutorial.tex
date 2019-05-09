@@ -221,11 +221,11 @@ Next, examine the relationship between fluorescence within an ROI and in the sur
 There are several approaches for dealing with neuropil contamination, the most common involve subtracting the surrounding neuropil fluorescence from each ROI with a scale factor determined by linear regression or hand-picked manually. I will describe the method we have adopted in the Mrsic-Flogel lab, developed by Maxime Rio (Figure \ref{fig:neuropil}). 
 We fit both ROI and surround fluorescence to asymmetric Student-t (ASt) distributions, whose mean was determined by a common neuropil signal contributing to both ROI and surrounding fluorescence:
 \begin{align}
-	f_t^{(r)} &\sim \mathrm{ASt}(\alpha z_t + \mu^{(r)}, \sigma^2) \\
-	f_t^{(n)} &\sim \mathrm{ASt}(z_t + \mu^{(n)}, \sigma^2 / N) \\
-	z_t &\sim \mathcal{N}(0, s^2)
+	f_r(t) &\sim \mathrm{ASt}(\alpha z(t) + \mu_r, \sigma^2) \\
+	f_n(t) &\sim \mathrm{ASt}(z(t) + \mu_n, \sigma^2 / N) \label{eq:ast_n}\\
+	z(t) &\sim \mathcal{N}(0, s^2)
 \end{align}
-Here, $z_t$ is the time-varying neuropil trace, $\alpha$ is the contamination coefficient (constrained between 0 and 1 for the ROI and fixed to 1 for the surround), and $\sigma^2$ determines the scale of the two distributions. 
+Here, $z(t)$ is the time-varying neuropil trace, $\alpha$ is the contamination coefficient (constrained between 0 and 1 for the ROI and fixed to 1 for the surround), and $\sigma^2$ determines the scale of the two distributions. 
 The factor $N$ was set to 40, the typical ratio of the areas of surround and ROI masks. 
 The ASt distribution has different degrees of freedom $\nu_1$ and $\nu_2$ for its left and right tails. 
 We set $\nu_1=30$ and $\nu_2=1$, such that the left tail was approximately Gaussian, while the right tail resembled the Cauchy distribution. 
@@ -235,24 +235,24 @@ The advantage of this approach over widely used methods, lies in the use of the 
 The long right tail of the ASt distribution helps prevent over-estimating the neuropil component for densely active cells. 
 At the same time, the use of the ASt distribution for the surround signal helps account for transient increases in fluorescence arising from unannotated neurites or cell bodies, which could otherwise result in false negative transients in the corrected trace.
 
-The challenge of fitting this model is that the posterior distributions over model parameters, including the neuropil trace $z_t$, cannot be computed exactly. 
+The challenge of fitting this model is that the posterior distributions over model parameters, including the neuropil trace $z(t)$, cannot be computed exactly. 
 Instead, we use variational Bayesian methods to approximate them. The neuropil corrected fluorescence trace was then estimated as the ``noise'' of the ASt model:
 \begin{equation}
-	f_{t} = f_{t}^{(r)} - \alpha z_t
+	f(t) = f_r(t)- \alpha z(t)
 \end{equation}
 
 \begin{figure}[b]
   \centering
   \tikz{ %
     \node[latent] (sigma_z) {$s$} ; %
-    \node[latent, right=of sigma_z] (z) {$z_t$} ; %   
-    \node[obs, above right=of z] (f_r) {$f^{(r)}_t$} ; %
-    \node[obs, below right=of z] (f_n) {$f^{(n)}_t$} ; %
+    \node[latent, right=of sigma_z] (z) {$z(t)$} ; %   
+    \node[obs, above right=of z] (f_r) {$f_r(t)$} ; %
+    \node[obs, below right=of z] (f_n) {$f_n(t)$} ; %
     \node[latent, above right=of f_r] (alpha) {$\alpha$} ; %
     \node[latent, below right=of f_r] (sigma_f) {$\sigma$} ; %
-    \node[latent, right=of f_r] (mu_r) {$\mu^{(r)}$} ; %
-    \node[latent, right=of f_n] (mu_n) {$\mu^{(n)}$} ; %
-    \plate[inner sep=0.25cm, xshift=-0.04cm, yshift=0.12cm] {plate1} {(z) (f_n) (f_r)} {N}; %
+    \node[latent, right=of f_r] (mu_r) {$\mu_r$} ; %
+    \node[latent, right=of f_n] (mu_n) {$\mu_n$} ; %
+    \plate[inner sep=0.25cm, xshift=-0.04cm, yshift=0.12cm] {plate1} {(z) (f_n) (f_r)} {$N_{frames}$}; %
     \edge {sigma_z} {z} ; %  
     \edge {z, sigma_f, mu_n} {f_n} ; %
     \edge {z, sigma_f, mu_r} {f_r} ; %
@@ -261,6 +261,22 @@ Instead, we use variational Bayesian methods to approximate them. The neuropil c
   \caption{Probabilistic graphical model for neuropil contamination.}
   \label{fig:neuropil}
 \end{figure}
+
+Optimization and correction is carried out using the function \texttt{fit\_ast\_model}, available at ...: 
+\lstset{emph={fit_ast_model}, emphstyle=\color{red}}
+\begin{lstlisting}[language=Octave]
+corrected_trace = fit_ast_model([roi_trace;  donut_trace], [1 N]);
+\end{lstlisting}
+
+The second argument specifies the relative size of the ROI and donut masks and is used to set the relative scale two ASt distributions ($N$ in Eq. \ref{eq:ast_n}). 
+In practice, the results are robust to a wide range of settings for these values. 
+The ASt model is not limited to finding common contaminating signals in two traces. 
+In principle, we could split the neuropil donut into multiple sectors and provide a trace for each one of them.
+\begin{exercisebox}[frametitle={Exercise \nexercise: ASt model on synthetic data}]
+Using the code provided in the pipeline script, test the ASt model on synthetic data and compare it to the standard approach of subtracting a scaled version of the donut trace.
+
+What assumptions does the ASt model rely on? Try to modify the generative model used to create synthetic data to make it fail.
+\end{exercisebox}
 
 \begin{exercisebox}[frametitle={Exercise \nexercise: Neuropil correction}]
 Fit the ASt model to ROIs you have selected.
