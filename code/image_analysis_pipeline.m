@@ -196,6 +196,35 @@ xlim([50 250])
 xlabel('neuropil fluorescence')
 ylabel('ROI fluorescence')
 %%
+% demonstration of ASt model performance of simulated data
+% common neuropil signal
+z = randn(1,1000) * 3;
+% true cell signal
+x = exp(randn(1,1000));
+% true donut signal
+y = exp(randn(1,1000));
+% fit ASt model
+x_hat = fit_ast_model(...
+        [x+z;  ...
+         y+z], [1 1]);
+% fit linear regression model for comparison
+[b, stats] = robustfit(y+z, x+z);
+% plot results
+figure;
+h(1) = subplot(3,1,1);
+plot(x); hold on; plot(x+z)
+legend('true cell signal', 'contaminated cell signal')
+h(2) = subplot(3,1,2);
+plot(y); hold on; plot(y+z)
+legend('true donut signal', 'contaminated donut signal')
+h(3) = subplot(3,1,3);
+hold on; plot(x);
+plot(x_hat)     
+plot(stats.resid + median(y+z)*b(2))
+legend('true cell signal', 'ASt recovered donut signal', ...
+    'regression recovered signal')
+linkaxes(h, 'x')
+%%
 % let's attempt to implement a simple neuropil correction 
 for ind = 1:numel(rois)
     fprintf('Fitting ROI %d of %d...\n', ind, numel(rois));
