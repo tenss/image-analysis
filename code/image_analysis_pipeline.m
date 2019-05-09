@@ -7,7 +7,7 @@
 % actually request the data, which is convenient when working with stacks 
 % that may be many gigabytes in size.
 
-stackpath = 'retinotopy_all.tif';
+stackpath = 'SFTF_stack_00001.tif';
 imStack = TIFFStack(stackpath);
 
 % check the dimensions of our stack
@@ -23,7 +23,7 @@ subplot(1,2,1)
 imagesc(imStack(:,:,1))
 colormap(gray)
 axis equal off
-caxis([0 500] + 32768)
+caxis([-300 500])
 title('single frame')
 
 % compare to mean image stack
@@ -31,7 +31,7 @@ avgStack = mean(imStack, 3);
 subplot(1,2,2)
 imagesc(avgStack)
 colormap(gray)
-caxis([0 500] + 32768)
+%caxis([0 500])
 axis equal off
 title('frame average')
 
@@ -41,7 +41,7 @@ frame = imStack(:,:,1);
 % bins = [-200:10:1000]; 
 
 % if using retinotopy_all.tif 
-bins = [-200:10:1000] + 32768; 
+bins = [-500:10:1000]; 
 
 figure, histogram(frame(:), bins, 'normalization', 'probability');
 %%
@@ -61,12 +61,12 @@ hold on
 % plot the fit to compare with data distribution
 % range = [-200:1:1000];
 % if using retinotopy_all.tif 
-range = [-200:1:1000] + 32768;
+range = [-500:1:1000];
 
 plot(range, pdf(gmmodel,range')*10, 'LineWidth', 2);
 
 % we'll use the lowest mean Gaussian as our estimate of the offset
-offset = min(gmmodel.mu);
+offset = min(gmmodel.mu)
 xlabel('gray level')
 ylabel('density')
 
@@ -93,9 +93,9 @@ figure, plot(xyshifts')
 xlabel('frame number')
 ylabel('pixel shift')
 legend('x shift', 'y shift')
-
+%%
 % correct frame shifts
-regStack = zeros(size(imStack), 'uint16');
+regStack = zeros(size(imStack), getDataClass(imStack));
 for ind = 1:nt
     regStack(:,:,ind) = shiftframe(imStack(:,:,ind), ...
         xyshifts(1,ind), xyshifts(2,ind));
@@ -110,15 +110,15 @@ regAvg = mean(regStack,3);
 % lets compare the mean images before and after motion correction
 figure
 hAx(1) = subplot(1,2,1);
-imagesc(avgStack), colormap(gray), axis equal off, caxis([offset offset+300])
+imagesc(avgStack), colormap(gray), axis equal off, caxis([offset offset+500])
 
 hAx(2) = subplot(1,2,2);
-imagesc(regAvg), colormap(gray), axis equal off, caxis([offset offset+300])
+imagesc(regAvg), colormap(gray), axis equal off, caxis([offset offset+500])
 
 linkaxes(hAx);
 %%
 % select some ROIs using a simple GUI
-RoiMaker(regAvg, [offset offset+300]);
+RoiMaker(regAvg, [offset offset+500]);
 
 
 %%
@@ -198,17 +198,20 @@ ylabel('ROI fluorescence')
 %%
 % let's attempt to implement a simple neuropil correction 
 for ind = 1:numel(rois)
-    % estimate correction coefficient
-    [b, stats] = robustfit(rois(ind).neuropil, rois(ind).activity);
-    rois(ind).activity_corrected = stats.resid' + ...
-        b(2) * median(rois(ind).neuropil);
+    fprintf('Fitting ROI %d of %d...\n', ind, numel(rois));
+    rois(ind).drift = running_percentile(rois(ind).activity, 500, 40);
+    rois(ind).drift = rois(ind).drift' - median(rois(ind).drift);
+    % fit ASt neuropil model
+    rois(ind).activity_corrected_ast = fit_ast_model(...
+        [rois(ind).activity - rois(ind).drift;  ...
+         rois(ind).neuropil], [1 40]);
     
     % reestimate F0 and dF/F
-    gmmodel = fitgmdist(rois(ind).activity_corrected', 2, ...
+    gmmodel = fitgmdist(rois(ind).activity_corrected_ast', 2, ...
         'Options', options);
     rois(ind).f0 = min(gmmodel.mu);
-    rois(ind).dfof_corrected = (rois(ind).activity_corrected-rois(ind).f0) ...
-        / rois(ind).f0;
+    rois(ind).dfof_corrected = (rois(ind).activity_corrected_ast-rois(ind).f0) ...
+        / rois(ind).f0;  
 end
 
 % compare to corrected and uncorrected traces
