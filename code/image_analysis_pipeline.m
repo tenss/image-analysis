@@ -8,20 +8,13 @@
 % that may be many gigabytes in size.
 
 stackpath = 'retinotopy_all.tif';
-tsStack = TIFFStack(stackpath);
+imStack = TIFFStack(stackpath);
 
 % check the dimensions of our stack
-[nx, ny, nt] = size(tsStack);
+[nx, ny, nt] = size(imStack);
 fprintf('stack size is: [%d, %d, %d]\n', nx, ny, nt);
 
 % check the class and memory usage of tsStack
-whos tsStack
-
-%% if we are working with small stack here, so we can load it all into memory
-%imStack = tsStack(:,:,:);
-imStack = tsStack;
-
-% check the class and memory usage of imStack
 whos imStack
 
 %% lets have a look at a single frame of the stack

@@ -1,5 +1,5 @@
 \documentclass[a4paper]{report}
-\usepackage{amsmath,mathrsfs}
+\usepackage{amsmath,mathrsfs,amsfonts}
 \usepackage{mathtools}
 \usepackage{tabularx,booktabs}
 \usepackage{graphicx}
@@ -25,7 +25,10 @@
     numberstyle=\tiny\color{codegray},
     stringstyle=\color{codepurple},
     basicstyle=\footnotesize,
-    breakatwhitespace=false,         
+    numbers=left,
+    breakatwhitespace=false,
+    xleftmargin=.15in,
+    xrightmargin=.15in, 
     breaklines=true,                 
     captionpos=b,                    
     keepspaces=true,                 
@@ -33,7 +36,8 @@
     showspaces=false,                
     showstringspaces=false,
     showtabs=false,                  
-    tabsize=2
+    tabsize=2,
+	firstnumber=last  
 }
 \lstset{style=matlab}
 
@@ -88,6 +92,8 @@ imgs = cellfun(@(p) TIFFStack(p, false), stackpaths, 'un', false);
 imStack = TensorStack(3, imgs{:});
 \end{lstlisting}
 
+\texttt{TensorStack}'s can also be \texttt{reshape}'d just like MATLAB tensors, which is useful when working with multiple channel or z-plane datasets.
+
 \begin{exercisebox}[frametitle={Exercise \nexercise: Using \texttt{TIFFStack} to memory map image data}]
 Use \texttt{TIFFStack} to load an image stack. Using the \texttt{whos} command check memory usage of the resulting object. 
 Then use \texttt{size} to check the its dimensions (\texttt{TIFFStack} class implements several this and several other functions that can typically use regular matrices as arguments). 
@@ -124,14 +130,14 @@ While we cannot correct for z-drift offline (unless we acquire fine z-stacks), w
 To do this, we first need to define an image that we are going to use as the reference for registration.
 Typically, we can simply use the mean of the stack as a reference.
 However, if motion is excessive we might have to select a subset of frames where it is managable.
-
+We can use the \texttt{mean} function directly with a \texttt{TIFFStack} or \texttt{TensorStack} object:
 \begin{lstlisting}[language=Octave]
 avgStack = mean(imStack, 3);
 \end{lstlisting}
 
 To estimate X/Y shifts, we will compute the cross-correlation (or more accurately, phase correlation) of individual frames with the reference image.
 It is more computationally efficient to do this in Fourier domain and therefore we will first compute FFTs of the reference image and individual frames, before passing them to the accessory function \texttt{dftregister} to compute the shifts.
-
+\lstset{emph={dftregister}, emphstyle=\color{red}}
 \begin{lstlisting}[language=Octave]
 % cropping the images to avoid the visual stimulation artefacts on the edge
 trimPix = 40;
@@ -149,6 +155,8 @@ for ind = 1:nt
 end
 regAvg = mean(regStack,3);
 \end{lstlisting}
+Calling \texttt{imStack(:,:,ind)} will force \texttt{TIFFStack} to load image data from file and the resulting \texttt{regStack} will be a regular MATLAB tensor. 
+If we wanted to avoid allocating memory for the whole stack, we could instead apply frame shifts just before extracting ROI activity traces.
 
 \begin{exercisebox}[frametitle={Exercise \nexercise: Motion correction}]
 Compute the reference image and use the phase correlation algorithm to estimate frame shifts for all frames in the stack.
@@ -182,8 +190,29 @@ Using \texttt{RoiMaker}, label 30-50 neuronal somata.
 
 \section{Activity extraction}
 Once we have identified the ROIs, we need to extract their activity traces. 
-This task is complicated by the fact that the measured fluorescence could be influenced by factors other than neural activity (or Ca$^{2+}$ concentration) of the region of interest. 
+To efficiently compute mean fluorescence within each ROI, we reshape the stack to flatten X and Y dimensions and use a binary mask to select pixels within each region.
+\begin{lstlisting}[language=Octave]
+% reshape the stack for easy indexing
+regStack = reshape(regStack, nx*ny, nt);
+% extract activity traces for each ROI
+for ind = 1:numel(rois)
+    mask = reshape(rois(ind).footprint, nx*ny, 1);
+    rois(ind).activity = mean(regStack(mask,:)) - offset;
+end
+\end{lstlisting}
 
+This task is complicated by the fact that the measured fluorescence could be influenced by factors other than neural activity (or Ca$^{2+}$ concentration) of the region of interest, most importantly by contaminating neuropil fluorescence from the surrounding tissue.
+To identify and remove neuropil contamination, we will create donut-shaped masks around each ROI, excluding any annotated regions:
+\lstset{emph={makedonuts}, emphstyle=\color{red}}
+\begin{lstlisting}[language=Octave]
+% make neuropil masks around each cell excluding other labeled cells
+rois = makedonuts(rois, 30, 30);
+% extract neuropil traces for each ROI
+for ind = 1:numel(rois)
+    mask = reshape(rois(ind).donut, nx*ny, 1);
+    rois(ind).neuropil = mean(regStack(mask,:)) - offset;
+end
+\end{lstlisting}
 \begin{exercisebox}[frametitle={Exercise \nexercise: Neuropil contamination}]
 First let us examine the extracted activity traces by plotting the matrix of fluorescence responses as a colormap.
 Next, examine the relationship between fluorescence within an ROI and in the surrounding neuropil. What is the origin of the correlation between them?
@@ -241,11 +270,26 @@ Plotting activity across ROIs as a colormap, compare responses before and after 
 \end{exercisebox}
 
 \section{End-to-end pipelines}
-The approach describe above is 
-The idea is to recast the problem of segmentation and activity extraction as a fitting latent variable model, where fluorescence in the imaging stack arises as the sum of number of spatially localized sources with different fluorescence time courses.
+The approach described above performs segmentation and activity extraction separately. 
+However, we can take advantage of temporal fluctuations in fluorescence to help segment images. 
+Intuitively, pixels that consistent go on and off together are likely reflecting activity of the same neuron. 
+To accomplish this, we recast the problem of segmentation and activity extraction as a fitting latent variable model, where fluorescence in the imaging stack arises as the sum of number of spatially localized sources with different fluorescence time courses.
+This idea is at the core of methods such as constrained nonnegative matrix factorization (CNMF).
+CNMF expresses the image stack $\mathbf{Y} \in \mathbb { R } ^ { D \times T }$ of $D$ pixels and $T$ frames in the following form:
+\begin{equation}
+	\mathbf{Y} = \mathbf{AC} + \mathbf{BF} + \mathbf{E}.
+	\label{eq:cnmf}
+\end{equation}
+Here $\mathbf{A} \in \mathbb { R } ^ { D \times N }$ is a matrix of $N$ cell footprints $\mathbf{A} = [ \mathbf { a } _ { 1 } , \mathbf { a } _ { 2 } , \ldots , \mathbf { a } _ { N } ]$ and $\mathbf{C} \in \mathbb { R } ^ { N \times T }$ is a matrix of activity traces $\mathbf{C} = [ \mathbf { c } _ { 1 } , \mathbf { c } _ { 2 } , \ldots , \mathbf { c } _ { N } ] ^ { \top }$. 
+$\mathbf{B}$ and $\mathbf{F}$ are matrices of footprints and traces for neuropil components and $\mathbf{E}$ is noise not captured by the model.
+
+To solve Eq. \ref{eq:cnmf} we must apply some constraints: (1) both $\mathbf{A}$ and $\mathbf{C}$ are non-negative; (2) footprints $\mathbf{A}$ are spatially sparse; (3) activity traces $\mathbf{C}$ obey calcium indicator dynamics. We can estimate the unknowns by alternating between solving for spatial components $\mathbf{A}$ and $\mathbf{B}$ and temporal component $\mathbf{C}$ and $\mathbf{F}$, subject to the constraints.
+
+Suite2p takes a conceptually similar approach to define ROI masks, but then extracts activity by averaging the pixels within each mask as we had done above.
 
 \section{Next steps - interpreting responses}
-The space of downstream analyses you could do with calcium imaging data is vast and limited only by your creativity. For the purposes of this summer school, we'll cover two widely used approaches for characterizing neural responses. 
+The space of downstream analyses you could do with calcium imaging data is vast and limited only by your creativity. 
+For the purposes of this summer school, we'll cover two widely used approaches for characterizing neural responses. 
 We are going to focus on methods of that seek to identify the factors contributing to responses of single neurons or regions of interest. 
 Essentially, the task we will aim to solve is that of modeling neuronal responses as a function of experimental variables. 
 We will not cover population level analyses and decoding methods that address the reverse problem of reconstructing sensory or behavioral variables from neural data. 
@@ -267,4 +311,9 @@ Visualize population activity my plotting the response matrix as a colormap.
 \subsection{Linear encoding models}
 Often, the experimental variables whose impact on neural activity we would like to quantify are continuous and multiple factors might contribute to responses at the same time. 
 In these situations we often would like to disambiguate the effects of different experimental variables from each other. 
+The provided example dataset is an widefield imaging stack of mouse dorsal neocortex, acquired as mice performed a visual change detection task.
+In addition to task events, such as the timing of stimuli and licks, we've recorded mouse running speed and pupil diameter. 
+Your task is to measure the contribution of these factors to widefield fluorescence.
+
+
 \end{document}
