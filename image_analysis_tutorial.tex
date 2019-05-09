@@ -11,7 +11,7 @@
 \usepackage[a4paper,margin=2.7cm,tmargin=2.5cm,bmargin=2.5cm]{geometry} 
 \usepackage{tikz}
 \usepackage{listings}
-
+\usepackage{hyperref}
 \usepackage{color}
  
 \definecolor{codegreen}{rgb}{0,0.6,0}
@@ -51,7 +51,12 @@
 
 \newcommand{\nexercise}[0]{\arabic{exercises}\addtocounter{exercises}{1}}
 
-
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=blue,
+}
 
 \begin{document}
 
@@ -75,6 +80,14 @@ innerbottommargin=7pt,
 \section{Overview}
 In this tutorial we will go through the steps of required to transform images acquired on the microscope into activity traces, which can be used to downstream analyses.
 
+You will need to clone or copy several GitHub repositories to proceed with this tutorial:
+\begin{itemize}
+	\item \href{https://github.com/tenss/image-analysis}{https://github.com/tenss/image-analysis} the image analysis pipeline described in this document 
+	\item \href{https://github.com/DylanMuir/TIFFStack}{https://github.com/DylanMuir/TIFFStack} for lazy TIFF loading 
+	\item \href{https://github.com/...}{https://github.com/...} for neuropil correction
+\end{itemize} 
+
+\section{Loading data}
 Most functional imaging data sets you will work with in practice will be too large to load into RAM in their entirety. 
 To overcome this problem you can implement your own batch-loading subroutines or use packages such as \texttt{TIFFStack}, which allows you to memory map image files and read them from disk on demand. 
 To use it, we'll create a \texttt{TIFFStack} object by calling the constructor:
