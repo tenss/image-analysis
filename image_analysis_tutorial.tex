@@ -78,7 +78,7 @@ innerbottommargin=7pt,
 \textbf{\Large{Image analysis}}
 \end{center}	
 \section{Overview}
-In this tutorial we will go through the steps of required to transform images acquired on the microscope into activity traces, which can be used to downstream analyses.
+In this tutorial we will go through the steps of required to transform images acquired on the microscope into activity traces, which can be used for downstream analyses.
 
 You will need to clone or copy several GitHub repositories to proceed with this tutorial:
 \begin{itemize}
@@ -214,7 +214,15 @@ for ind = 1:numel(rois)
 end
 \end{lstlisting}
 
-This task is complicated by the fact that the measured fluorescence could be influenced by factors other than neural activity (or Ca$^{2+}$ concentration) of the region of interest, most importantly by contaminating neuropil fluorescence from the surrounding tissue.
+If examine the extracted activity traces, you may notice that the baseline changes on slow time scales. 
+These fluctuations can arise from a number of sources, including z-drift, bleaching, or loss of objective immersion.
+We can estimate these fluctuations by low-pass filtering the trace or computing a percentile of the fluorescence trace in a sliding window:  
+\begin{lstlisting}[language=Octave]
+% estimate 40th percentile in a running window of 500 frames
+rois(ind).drift = running_percentile(rois(ind).activity, 500, 40);
+rois(ind).drift = rois(ind).drift' - median(rois(ind).drift);
+\end{lstlisting}
+In addition to slow fluctuations from sources mentioned above, the measured fluorescence could be influenced by contaminating neuropil fluorescence from the surrounding tissue on faster timescales.
 To identify and remove neuropil contamination, we will create donut-shaped masks around each ROI, excluding any annotated regions:
 \lstset{emph={makedonuts}, emphstyle=\color{red}}
 \begin{lstlisting}[language=Octave]
@@ -275,21 +283,31 @@ Instead, we use variational Bayesian methods to approximate them. The neuropil c
   \label{fig:neuropil}
 \end{figure}
 
-Optimization and correction is carried out using the function \texttt{fit\_ast\_model}, available at ...: 
+Optimization and correction is carried out using the function \texttt{fit\_ast\_model}, available at ..., providing the neuropil and drift-corrected activity traces: 
 \lstset{emph={fit_ast_model}, emphstyle=\color{red}}
 \begin{lstlisting}[language=Octave]
-corrected_trace = fit_ast_model([roi_trace;  donut_trace], [1 N]);
+rois(ind).activity_corrected = fit_ast_model( ...
+        [rois(ind).activity - rois(ind).drift; rois(ind).neuropil], 
+        [1 40]);
 \end{lstlisting}
 
 The second argument specifies the relative size of the ROI and donut masks and is used to set the relative scale two ASt distributions ($N$ in Eq. \ref{eq:ast_n}). 
 In practice, the results are robust to a wide range of settings for these values. 
 The ASt model is not limited to finding common contaminating signals in two traces. 
 In principle, we could split the neuropil donut into multiple sectors and provide a trace for each one of them.
-\begin{exercisebox}[frametitle={Exercise \nexercise: ASt model on synthetic data}]
+\begin{exercisebox}[frametitle={Exercise \nexercise: Test ASt model on synthetic data}]
 Using the code provided in the pipeline script, test the ASt model on synthetic data and compare it to the standard approach of subtracting a scaled version of the donut trace.
 
 What assumptions does the ASt model rely on? Try to modify the generative model used to create synthetic data to make it fail.
 \end{exercisebox}
+
+Finally, we compute $\Delta$F/F$_0$ by estimate F$_0$ using the GMM approach we used for the image offset above. This approach assumes that cells are inactive most of the time, care should be taken when interpreting $\Delta$F/F$_0$ values to ensure that the conclusions are robust with respect to estimates of F$_0$:
+\begin{lstlisting}[language=Octave]
+gmmodel = fitgmdist(rois(ind).activity_corrected', 2, 'Options', options);
+rois(ind).f0 = min(gmmodel.mu);
+rois(ind).dfof_corrected = (rois(ind).activity_corrected - rois(ind).f0) ...
+    / rois(ind).f0;  
+\end{lstlisting}
 
 \begin{exercisebox}[frametitle={Exercise \nexercise: Neuropil correction}]
 Fit the ASt model to ROIs you have selected.
@@ -325,16 +343,36 @@ We will not cover population level analyses and decoding methods that address th
 You'll be provided with example datasets to try out the analyses. However, you are strongly encouraged to try to analyse the data you've collected during the summer school for your presentations.
 
 \subsection{Measuring ``tuning''}
-The first data set you will be provided with is a two-photon calcium imaging experiment in mouse V1. 
-During the experiment, awake mice were presented with drifting gratings of different directions, as well as spatial and temporal frequency.
-Your goal is to extract responses of single cells and visualize their tuning for visual stimulus properties.
+The data set you have been working with so far is a two-photon calcium imaging experiment in mouse V1. 
+It was acquired at 3.8 Hz\footnote{In fact the frame rate was 30.3 Hz in 8 imaging planes, giving a per-plane frame rate of $30.3/8 = 3.8$ Hz} while the mouse was passively viewing visual stimuli.
+During the experiment, we presented drifting gratings of different directions, as well as spatial and temporal frequency.
+Your goal is to extract responses of single cells and visualize their tuning for visual stimulus properties. 
+Each stimulus grating was presented for 16 frames starting with the 33rd frame of the stack.
+During each presentation, the grating was stationary for 8 frames before moving for 8 frames.
 
-\begin{exercisebox}[frametitle={Exercise \nexercise: 2P data pre-processing}]
-Using the analysis pipeline introduced above, extract activity of individual ROIs in from the image stack. 
-Since not all V1 neurons robustly respond to visual stimuli, make sure you select 30-50 cells to get a good sample.
+\begin{exercisebox}[frametitle={Exercise \nexercise: Mean response time course}]
+Examine time course of the stimulus response for several neurons by averaging the fluorescence trace over all stimulus presentations.
+\end{exercisebox}
 
-Carry out the steps of motion corrections, segmentation, and activity extraction.
-Visualize population activity my plotting the response matrix as a colormap.
+As you have seen, neuronal responses often have two components -- aligned with the onset of the static and moving phases of grating presentation. 
+Naturally, temporal frequency varies only for the drifting phase and is always 0 during the static phase.
+Therefore, from here on we will focus our analysis on the moving phase of the grating, frame 9 through 16 of each presentation.
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Spatial and temporal frequency tuning}]
+Sort the stimuli by SF, TF, and direction using the stimulus information provided in \texttt{}. 
+Plot the average SF/TF tuning, as well as SF/TF tuning for each direction. 
+How do SF, TF, and direction interact to determine responses?
+\end{exercisebox}
+
+Here we only analyzed a single stimulus presentation for each stimulus type. 
+As the result, our measurements reflect not only stimulus evoked but also spontaneous fluctuations in neural activity.
+Nevertheless, for robustly responsive cell we should be able to readily identify their preferred SF, TF and direction. 
+How could we go about doing this? 
+How can we determine which cells are ``responsive'' for a stimulus set such as this?
+
+\begin{exercisebox}[frametitle={Exercise \nexercise: Spatial distribution of tuning preferences in V1}]
+Mouse V1 does not have orientation columns but tuning of V1 neurons is not completely homogeneous. 
+Estimate preferred SF and TF for cells across the imaging field and see how SF/TF tuning is organized.
 \end{exercisebox}
 
 \subsection{Linear encoding models}
