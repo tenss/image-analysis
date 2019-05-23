@@ -253,14 +253,14 @@ legend('raw \DeltaF/F', 'corrected \DeltaF/F')
 figure
 subplot(1,2,1)
 imagesc(cat(1,rois.dfof));
-caxis([0 5])
+caxis([0 2])
 xlabel('frames')
 ylabel('cells')
 title('raw \DeltaF/F')
 
 subplot(1,2,2)
 imagesc(cat(1,rois.dfof_corrected))
-caxis([0 5])
+caxis([0 2])
 xlabel('frames')
 ylabel('cells')
 title('corrected \DeltaF/F')
