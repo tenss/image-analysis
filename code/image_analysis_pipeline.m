@@ -204,9 +204,7 @@ x = exp(randn(1,1000));
 % true donut signal
 y = exp(randn(1,1000));
 % fit ASt model
-x_hat = fit_ast_model(...
-        [x+z;  ...
-         y+z], [1 1]);
+x_hat = fit_ast_model([x+z; y+z], [1 1]);
 % fit linear regression model for comparison
 [b, stats] = robustfit(y+z, x+z);
 % plot results
@@ -231,15 +229,15 @@ for ind = 1:numel(rois)
     rois(ind).drift = running_percentile(rois(ind).activity, 500, 40);
     rois(ind).drift = rois(ind).drift' - median(rois(ind).drift);
     % fit ASt neuropil model
-    rois(ind).activity_corrected_ast = fit_ast_model(...
+    rois(ind).activity_corrected = fit_ast_model(...
         [rois(ind).activity - rois(ind).drift;  ...
          rois(ind).neuropil], [1 40]);
     
-    % reestimate F0 and dF/F
-    gmmodel = fitgmdist(rois(ind).activity_corrected_ast', 2, ...
+    % estimate F0 and dF/F
+    gmmodel = fitgmdist(rois(ind).activity_corrected', 2, ...
         'Options', options);
     rois(ind).f0 = min(gmmodel.mu);
-    rois(ind).dfof_corrected = (rois(ind).activity_corrected_ast-rois(ind).f0) ...
+    rois(ind).dfof_corrected = (rois(ind).activity_corrected - rois(ind).f0) ...
         / rois(ind).f0;  
 end
 
