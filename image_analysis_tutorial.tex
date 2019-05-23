@@ -257,7 +257,7 @@ The long right tail of the ASt distribution helps prevent over-estimating the ne
 At the same time, the use of the ASt distribution for the surround signal helps account for transient increases in fluorescence arising from unannotated neurites or cell bodies, which could otherwise result in false negative transients in the corrected trace.
 
 The challenge of fitting this model is that the posterior distributions over model parameters, including the neuropil trace $z(t)$, cannot be computed exactly. 
-Instead, we use variational Bayesian methods to approximate them. The neuropil corrected fluorescence trace was then estimated as the ``noise'' of the ASt model:
+Instead, we will use variational Bayesian methods to approximate them. The neuropil corrected fluorescence trace will then be estimated as the ``noise'' of the ASt model:
 \begin{equation}
 	f(t) = f_r(t)- \alpha z(t)
 \end{equation}
@@ -279,7 +279,7 @@ Instead, we use variational Bayesian methods to approximate them. The neuropil c
     \edge {z, sigma_f, mu_r} {f_r} ; %
 	\edge {alpha, z} {f_r} ; %    
   }
-  \caption{Probabilistic graphical model for neuropil contamination.}
+  \caption{Probabilistic graphical model for neuropil contamination. By convention, gray nodes indicate observed random variables, while white nodes are unobserved and their posterior distribution has to be inferred from the data.}
   \label{fig:neuropil}
 \end{figure}
 
@@ -295,6 +295,8 @@ The second argument specifies the relative size of the ROI and donut masks and i
 In practice, the results are robust to a wide range of settings for these values. 
 The ASt model is not limited to finding common contaminating signals in two traces. 
 In principle, we could split the neuropil donut into multiple sectors and provide a trace for each one of them.
+\texttt{fit\_ast\_model} can also correct for baseline drift as a part of the neuropil estimation procedure. However, we wont be using this functionality here.
+
 \begin{exercisebox}[frametitle={Exercise \nexercise: Test ASt model on synthetic data}]
 Using the code provided in the pipeline script, test the ASt model on synthetic data and compare it to the standard approach of subtracting a scaled version of the donut trace.
 
