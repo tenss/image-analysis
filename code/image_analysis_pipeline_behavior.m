@@ -6,42 +6,49 @@
 % the entire file into memory. Frames get read from disk only when we 
 % actually request the data, which is convenient when working with stacks 
 % that may be many gigabytes in size.
-stackpath = 'data/mousegreen/t1';
+
+stackpath = './';
 
 d = dir(fullfile(stackpath,'*.tif'));
 fnames = {d.name};
 stacks = cellfun(@(f) TIFFStack(fullfile(stackpath,f)), fnames,'un',0);
-tsStack = TensorStack(3,stacks{:});
+
+sStackInfo = cell2mat(cellfun( ...
+    @(stack) getImageTags(stack, 1:size(stack,3)), stacks, 'un', 0));
+
+imStack = TensorStack(3,stacks{:});
 
 % check the dimensions of our stack
-[nx, ny, nt] = size(tsStack);
+[nx, ny, nt] = size(imStack);
 fprintf('stack size is: [%d, %d, %d]\n', nx, ny, nt);
 
-% check the class and memory usage of tsStack
-whos tsStack
-
-%% if we are working with small stack here, so we can load it all into memory
-imStack = tsStack(:,:,:);
-%imStack = tsStack;
-
-% check the class and memory usage of imStack
-whos imStack
-
+%%
+% find trial start triggers
+triggerTimes = nan(nt, 1);
+for indF = 1:nt
+    tTriggerText = regexp(sStackInfo(indF).ImageDescription, ...
+        'nextFileMarkerTimestamps_sec = (.+?)(?m:$)', ...
+        'tokens', 'once');
+    if numel(tTriggerText)==1
+        triggerTimes(indF) = str2num(tTriggerText{1});
+    end
+end
+trialStarts = find(triggerTimes);
 %% lets have a look at a single frame of the stack
 figure
 subplot(1,2,1)
-imagesc(imStack(:,:,1))
+imagesc(imStack(:,:,100))
 colormap(gray)
 axis equal off
-caxis([-50 400])
+caxis([-300 500])
 title('single frame')
 
 % compare to mean image stack
-avgStack = mean(imStack, 3);
+avgStack = mean(imStack(:,:,100:400), 3);
 subplot(1,2,2)
 imagesc(avgStack)
 colormap(gray)
-caxis([-50 400])
+%caxis([0 500])
 axis equal off
 title('frame average')
 
@@ -51,10 +58,10 @@ frame = imStack(:,:,1);
 % bins = [-200:10:1000]; 
 
 % if using retinotopy_all.tif 
-bins = [-200:10:200]; 
+bins = [-500:10:1000]; 
 
 figure, histogram(frame(:), bins, 'normalization', 'probability');
-
+%%
 % it is skewed and there is a sharp peak that corresponds to the image
 % offset, which depends on the configuration of the acquisition board and
 % PMT amplifiers
@@ -71,20 +78,18 @@ hold on
 % plot the fit to compare with data distribution
 % range = [-200:1:1000];
 % if using retinotopy_all.tif 
-range = [-200:1:200];
+range = [-500:1:1000];
 
 plot(range, pdf(gmmodel,range')*10, 'LineWidth', 2);
 
 % we'll use the lowest mean Gaussian as our estimate of the offset
-offset = min(gmmodel.mu);
+offset = min(gmmodel.mu)
 xlabel('gray level')
 ylabel('density')
 
-% galvo scanning - no truly dark pixels, so lets use the minimum
-offset = double(min(reshape(imStack(:,:,1),[],1)));
 %% now let's correct for motion artefacts
 % cropping the images to avoid the visual stimulation artefacts on the edge
-trimPix = 0;
+trimPix = 40;
 % the registration algorithm works in the Fourier domain (look up the 
 % convolution theorem if you want to know why), so we start by computing
 % the 2D Fourier transform of the raw images and registration template
@@ -94,7 +99,7 @@ xyshifts = zeros(2, nt);
 fprintf('starting registration...\n')
 for ind = 1:nt
      fft_frame = fft2(double(imStack(:, trimPix+1:end-trimPix, ind)));
-     xyshifts(:, ind) = dftregister(fft_template, fft_frame, 20);
+     xyshifts(:, ind) = dftregister(fft_template, fft_frame, []);
      if mod(ind,1000)==0
          fprintf('calculating offset of frame %d...\n', ind)
      end
@@ -105,9 +110,9 @@ figure, plot(xyshifts')
 xlabel('frame number')
 ylabel('pixel shift')
 legend('x shift', 'y shift')
-
+%%
 % correct frame shifts
-regStack = zeros(size(imStack), 'uint16');
+regStack = zeros(size(imStack), 'int16');
 for ind = 1:nt
     regStack(:,:,ind) = shiftframe(imStack(:,:,ind), ...
         xyshifts(1,ind), xyshifts(2,ind));
@@ -122,15 +127,15 @@ regAvg = mean(regStack,3);
 % lets compare the mean images before and after motion correction
 figure
 hAx(1) = subplot(1,2,1);
-imagesc(avgStack), colormap(gray), axis equal off
+imagesc(avgStack), colormap(gray), axis equal off, caxis([offset offset+300])
 
 hAx(2) = subplot(1,2,2);
-imagesc(regAvg), colormap(gray), axis equal off
+imagesc(regAvg), colormap(gray), axis equal off, caxis([offset offset+300])
 
 linkaxes(hAx);
 %%
 % select some ROIs using a simple GUI
-RoiMaker(regAvg, [-10 300]);
+RoiMaker(regAvg, [offset offset+300]);
 
 
 %%
@@ -144,8 +149,8 @@ end
 
 % extra credit:
 % if we accidentally made empty ROIs, get rid of them
-% emptyIdx = arrayfun(@(r) nnz(r.footprint)==0, rois);
-% rois = rois(~emptyIdx);
+emptyIdx = arrayfun(@(r) nnz(r.footprint)==0, rois);
+rois = rois(~emptyIdx);
 %%
 % lets look at the activity of a single ROI
 figure
@@ -154,42 +159,23 @@ subplot(1,2,1), plot(rois(cellInd).activity)
 
 % as with the image offset, we can use a GMM to estimate f0
 subplot(1,2,2)
-histogram(rois(cellInd).activity,[0:1:400],'normalization','probability');
+histogram(rois(cellInd).activity,[0:10:1000],'normalization','probability');
 % fit a GMM with 3 Gaussians
-gmmodel = fitgmdist(rois(cellInd).activity', 4, 'Options', options);
+gmmodel = fitgmdist(rois(cellInd).activity', 3, 'Options', options);
 hold on;
-plot([0:400], pdf(gmmodel,[0:400]'), 'LineWidth', 2);
+plot([0:1000], pdf(gmmodel,[0:1000]')*10, 'LineWidth', 2);
 
 
 % loop over ROIs to calculate dF/F
 for ind = 1:numel(rois)
-    gmmodel = fitgmdist(rois(ind).activity', 4, 'Options', options);
+    gmmodel = fitgmdist(rois(ind).activity', 2, 'Options', options);
     rois(ind).f0 = min(gmmodel.mu);
     rois(ind).dfof = (rois(ind).activity-rois(ind).f0) / rois(ind).f0;
 end
 
 %%
-% let's look at the pattern of activity across the population
-figure
-imagesc(cat(1,rois.dfof));
-caxis([0 2])
-xlabel('frames')
-ylabel('cells')
-
-%%
 % make neuropil ROIs around each cell excluding other labeled cells
-rois = makedonuts(rois, 20, 10);
-figure
-subplot(1,2,1)
-imagesc(rois(2).footprint)
-title('ROI mask')
-axis equal off
-colormap gray 
-
-subplot(1,2,2)
-imagesc(rois(2).donut)
-title('neuropil mask')
-axis equal off
+rois = makedonuts(rois, 30, 30);
 
 % extract neuropil traces for each ROI
 for ind = 1:numel(rois)
@@ -197,30 +183,21 @@ for ind = 1:numel(rois)
     rois(ind).neuropil = mean(regStack(mask,:)) - offset;
 end
 
-%%
-% compare ROI and neuropil fluorescence frame by frame
-figure;
-subplot(1,2,1);
-plot(rois(cellInd).neuropil, rois(cellInd).activity, '.');
-[b, stats] = robustfit(rois(cellInd).neuropil, rois(cellInd).activity);
-hold on, plot([0 300],[0 300]*b(2) + b(1))
-xlim([50 250])
-xlabel('neuropil fluorescence')
-ylabel('ROI fluorescence')
-%%
-% let's attempt to implement a simple neuropil correction 
 for ind = 1:numel(rois)
-    % estimate correction coefficient
-    [b, stats] = robustfit(rois(ind).neuropil, rois(ind).activity);
-    rois(ind).activity_corrected = stats.resid' + ...
-        b(2) * median(rois(ind).neuropil);
+    fprintf('Fitting ROI %d of %d...\n', ind, numel(rois));
+    rois(ind).drift = running_percentile(rois(ind).activity, 500, 40);
+    rois(ind).drift = rois(ind).drift' - median(rois(ind).drift);
+    % fit ASt neuropil model
+    rois(ind).activity_corrected = fit_ast_model(...
+        [rois(ind).activity - rois(ind).drift;  ...
+         rois(ind).neuropil], [1 40], 'detrend', 'none');
     
-    % reestimate F0 and dF/F
-    gmmodel = fitgmdist(rois(ind).activity_corrected', 2, ...
+    % estimate F0 and dF/F
+    gmmodel = fitgmdist(rois(ind).activity_corrected', 3, ...
         'Options', options);
     rois(ind).f0 = min(gmmodel.mu);
-    rois(ind).dfof_corrected = (rois(ind).activity_corrected-rois(ind).f0) ...
-        / rois(ind).f0;
+    rois(ind).dfof_corrected = (rois(ind).activity_corrected - rois(ind).f0) ...
+        / rois(ind).f0;  
 end
 
 % compare to corrected and uncorrected traces
@@ -235,14 +212,14 @@ legend('raw \DeltaF/F', 'corrected \DeltaF/F')
 figure
 subplot(1,2,1)
 imagesc(cat(1,rois.dfof));
-caxis([0 5])
+caxis([0 2])
 xlabel('frames')
 ylabel('cells')
 title('raw \DeltaF/F')
 
 subplot(1,2,2)
 imagesc(cat(1,rois.dfof_corrected))
-caxis([0 5])
+caxis([0 2])
 xlabel('frames')
 ylabel('cells')
 title('corrected \DeltaF/F')

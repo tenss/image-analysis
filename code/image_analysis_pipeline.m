@@ -7,9 +7,11 @@
 % actually request the data, which is convenient when working with stacks 
 % that may be many gigabytes in size.
 
-stackpath = 'SFTF_stack_00001.tif';
-imStack = TIFFStack(stackpath);
+stackpath = 'fisch_light_00002.tif';
+imStack_old = TIFFStack(stackpath);
 
+
+imStack = imStack_old(1:2:end, 1:2:end, :)
 % check the dimensions of our stack
 [nx, ny, nt] = size(imStack);
 fprintf('stack size is: [%d, %d, %d]\n', nx, ny, nt);
@@ -132,8 +134,8 @@ end
 
 % extra credit:
 % if we accidentally made empty ROIs, get rid of them
-% emptyIdx = arrayfun(@(r) nnz(r.footprint)==0, rois);
-% rois = rois(~emptyIdx);
+emptyIdx = arrayfun(@(r) nnz(r.footprint)==0, rois);
+rois = rois(~emptyIdx);
 %%
 % lets look at the activity of a single ROI
 figure
@@ -204,7 +206,7 @@ x = exp(randn(1,1000));
 % true donut signal
 y = exp(randn(1,1000));
 % fit ASt model
-x_hat = fit_ast_model([x+z; y+z], [1 1]);
+x_hat = fit_ast_model([x+z; y+z], [1 1], 'detrend', 'none');
 % fit linear regression model for comparison
 [b, stats] = robustfit(y+z, x+z);
 % plot results
@@ -231,7 +233,7 @@ for ind = 1:numel(rois)
     % fit ASt neuropil model
     rois(ind).activity_corrected = fit_ast_model(...
         [rois(ind).activity - rois(ind).drift;  ...
-         rois(ind).neuropil], [1 40]);
+         rois(ind).neuropil], [1 40], 'detrend', 'none');
     
     % estimate F0 and dF/F
     gmmodel = fitgmdist(rois(ind).activity_corrected', 2, ...

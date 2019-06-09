@@ -1,28 +1,18 @@
-stim_params = [Orilist(rand_stim_idx); SFlist(rand_stim_idx); TFlist(rand_stim_idx)]';
-
+load stim_data
+% indices of individual grating presentations
+% gratings are presented every 16 frames starting from frame 33
 stim_frames = 33:16:(32+16*288);
-
+% columns of stim_params are direction, SF, and TF respectively
 Oris = unique(stim_params(:,1)); 
 SFs = unique(stim_params(:,2));
 TFs = unique(stim_params(:,3));
 nOris = numel(Oris);
 nSFs = numel(SFs);
 nTFs = numel(TFs);
-%%
-for indCell = 1:numel(rois)
-    resp = reshape(rois(indCell).dfof_corrected(33:end-32), 16, [])';
-    [max_resp(indCell), resp_id] = max(mean(resp(:,9:16),2));
-    best_stim(indCell,:) = stim_params(resp_id,:);
-    stats = regionprops(full(rois(indCell).footprint));
-    pos(indCell, :) = stats.Centroid;
-end
 
-idx = max_resp>1;
-
-figure; scatter(pos(idx, 1), pos(idx,2), max_resp(idx)*40, ...
-    best_stim(idx,3) - best_stim(idx,2), 'filled');
 %%
-indCell = 99;
+% plot an example cell
+indCell = 1;
 clf;
 plot_pos = [1 2 3 6 9 8 7 4];
 for iOri = 1:nOris
@@ -39,6 +29,7 @@ for iOri = 1:nOris
     end
     
     subplot(3,3,plot_pos(iOri));
+    % plot SF/TF tuning as a colormap, x-axis is SF, y-axis is TF
     imagesc(flipud(squeeze(r(iOri,:,:))'));
     caxis([0 max(r(:))])
 end

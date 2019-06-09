@@ -83,8 +83,8 @@ In this tutorial we will go through the steps of required to transform images ac
 You will need to clone or copy several GitHub repositories to proceed with this tutorial:
 \begin{itemize}
 	\item \href{https://github.com/tenss/image-analysis}{https://github.com/tenss/image-analysis} the image analysis pipeline described in this document 
-	\item \href{https://github.com/DylanMuir/TIFFStack}{https://github.com/DylanMuir/TIFFStack} for lazy TIFF loading 
-	\item \href{https://github.com/...}{https://github.com/...} for neuropil correction
+	\item \href{https://github.com/DylanMuir/TIFFStack}{https://github.com/DylanMuir/TIFFStack} for lazy TIFF loading (Dylan Muir)
+	\item \href{https://github.com/BaselLaserMouse/ast\_model}{https://github.com/BaselLaserMouse/ast\_model} for neuropil correction (Maxime Rio)
 \end{itemize} 
 
 \section{Loading data}
@@ -283,7 +283,7 @@ Instead, we will use variational Bayesian methods to approximate them. The neuro
   \label{fig:neuropil}
 \end{figure}
 
-Optimization and correction is carried out using the function \texttt{fit\_ast\_model}, available at ..., providing the neuropil and drift-corrected activity traces: 
+Optimization and correction is carried out using the function \texttt{fit\_ast\_model}, available on \href{https://github.com/BaselLaserMouse/ast\_model}{GitHub}, providing the neuropil and drift-corrected activity traces: 
 \lstset{emph={fit_ast_model}, emphstyle=\color{red}}
 \begin{lstlisting}[language=Octave]
 rois(ind).activity_corrected = fit_ast_model( ...
@@ -321,7 +321,7 @@ Plotting activity across ROIs as a colormap, compare responses before and after 
 \section{End-to-end pipelines}
 The approach described above performs segmentation and activity extraction separately. 
 However, we can take advantage of temporal fluctuations in fluorescence to help segment images. 
-Intuitively, pixels that consistent go on and off together are likely reflecting activity of the same neuron. 
+Intuitively, pixels that consistently go on and off together are likely reflecting activity of the same neuron. 
 To accomplish this, we recast the problem of segmentation and activity extraction as a fitting latent variable model, where fluorescence in the imaging stack arises as the sum of number of spatially localized sources with different fluorescence time courses.
 This idea is at the core of methods such as constrained nonnegative matrix factorization (CNMF).
 CNMF expresses the image stack $\mathbf{Y} \in \mathbb { R } ^ { D \times T }$ of $D$ pixels and $T$ frames in the following form:
@@ -338,16 +338,17 @@ Suite2p takes a conceptually similar approach to define ROI masks, but then extr
 
 \section{Next steps - interpreting responses}
 The space of downstream analyses you could do with calcium imaging data is vast and limited only by your creativity. 
-For the purposes of this summer school, we'll cover two widely used approaches for characterizing neural responses. 
-We are going to focus on methods of that seek to identify the factors contributing to responses of single neurons or regions of interest. 
-Essentially, the task we will aim to solve is that of modeling neuronal responses as a function of experimental variables. 
-We will not cover population level analyses and decoding methods that address the reverse problem of reconstructing sensory or behavioral variables from neural data. 
-You'll be provided with example datasets to try out the analyses. However, you are strongly encouraged to try to analyse the data you've collected during the summer school for your presentations.
+For the purposes of this summer school, we will do the simplest possible analysis and look at how fluorescence evolves in response to external stimuli. 
+%We are going to focus on methods of that seek to identify the factors contributing to responses of single neurons or regions of interest. 
+%Essentially, the task we will aim to solve is that of modeling neuronal responses as a function of experimental variables. 
+%We will not cover population level analyses and decoding methods that address the reverse problem of reconstructing sensory or behavioral variables from neural data. 
+You'll be provided with an example dataset to try out the analysis pipeline.
+However, you are strongly encouraged to try to analyse the data you've collected during the summer school for your presentations.
 
-\subsection{Measuring ``tuning''}
+\subsection{Tuning of V1 neurons}
 The data set you have been working with so far is a two-photon calcium imaging experiment in mouse V1. 
 It was acquired at 3.8 Hz\footnote{In fact the frame rate was 30.3 Hz in 8 imaging planes, giving a per-plane frame rate of $30.3/8 = 3.8$ Hz} while the mouse was passively viewing visual stimuli.
-During the experiment, we presented drifting gratings of different directions, as well as spatial and temporal frequency.
+During the experiment, we presented drifting gratings of different directions, as well as spatial and temporal frequencies.
 Your goal is to extract responses of single cells and visualize their tuning for visual stimulus properties. 
 Each stimulus grating was presented for 16 frames starting with the 33rd frame of the stack.
 During each presentation, the grating was stationary for 8 frames before moving for 8 frames.
@@ -361,14 +362,15 @@ Naturally, temporal frequency varies only for the drifting phase and is always 0
 Therefore, from here on we will focus our analysis on the moving phase of the grating, frame 9 through 16 of each presentation.
 
 \begin{exercisebox}[frametitle={Exercise \nexercise: Spatial and temporal frequency tuning}]
-Sort the stimuli by SF, TF, and direction using the stimulus information provided in \texttt{}. 
+Sort the stimuli by SF, TF, and direction using the stimulus information provided in \texttt{stim\_params}. 
+Code in \texttt{plot\_sftf\_responses.m} will help you get started.
 Plot the average SF/TF tuning, as well as SF/TF tuning for each direction. 
 How do SF, TF, and direction interact to determine responses?
 \end{exercisebox}
 
 Here we only analyzed a single stimulus presentation for each stimulus type. 
 As the result, our measurements reflect not only stimulus evoked but also spontaneous fluctuations in neural activity.
-Nevertheless, for robustly responsive cell we should be able to readily identify their preferred SF, TF and direction. 
+Nevertheless, for robustly responsive cells we should be able to readily identify their preferred SF, TF and direction. 
 How could we go about doing this? 
 How can we determine which cells are ``responsive'' for a stimulus set such as this?
 
@@ -377,12 +379,22 @@ Mouse V1 does not have orientation columns but tuning of V1 neurons is not compl
 Estimate preferred SF and TF for cells across the imaging field and see how SF/TF tuning is organized.
 \end{exercisebox}
 
-\subsection{Linear encoding models}
-Often, the experimental variables whose impact on neural activity we would like to quantify are continuous and multiple factors might contribute to responses at the same time. 
-In these situations we often would like to disambiguate the effects of different experimental variables from each other. 
-The provided example dataset is an widefield imaging stack of mouse dorsal neocortex, acquired as mice performed a visual change detection task.
-In addition to task events, such as the timing of stimuli and licks, we've recorded mouse running speed and pupil diameter. 
-Your task is to measure the contribution of these factors to widefield fluorescence.
+%\subsection{Linear encoding models}
+%Often, the experimental variables whose impact on neural activity we would like to quantify are continuous and multiple factors might contribute to responses at the same time. 
+%In these situations we often would like to disambiguate the effects of different experimental variables from each other. 
+%The provided example dataset is an widefield imaging stack of mouse dorsal neocortex, acquired as mice performed a visual change detection task.
+%In addition to task events, such as the timing of stimuli and licks, we've recorded mouse running speed and pupil diameter. 
+%Your task is to measure the contribution of these factors to widefield fluorescence.
 
+\subsection{Analyzing TENSS data}
+To synchronize imaging and stimulation on the microscopes you built during the school, connected a digital output of the BPod to one of trigger channels of ScanImage. 
+The timing of these triggers is recorded in the headers of the imaging frames. 
+Use \texttt{imaging\_pipeline\_behavior.m} to extract these timings. 
+Trial types for each trial can be found in the BPod session file under \texttt{SessionData.TrialTypes}. 
 
+\begin{exercisebox}[frametitle={Exercise \nexercise: Responses to oddball stimulus}]
+Preprocess the data you acquired on the custom-built microscopes -- apply motion correction, select some ROIs and extract their activity traces. 
+
+To begin exploring the data, sort trials by trial type and align recordings to using the \texttt{aligntrace} function.
+\end{exercisebox}
 \end{document}
