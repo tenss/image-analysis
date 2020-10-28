@@ -7,11 +7,10 @@
 % actually request the data, which is convenient when working with stacks 
 % that may be many gigabytes in size.
 
-stackpath = 'fisch_light_00002.tif';
-imStack_old = TIFFStack(stackpath);
+stackpath = '../data/SFTF_stack_00001.tif';
+imStack = TIFFStack(stackpath);
 
 
-imStack = imStack_old(1:2:end, 1:2:end, :)
 % check the dimensions of our stack
 [nx, ny, nt] = size(imStack);
 fprintf('stack size is: [%d, %d, %d]\n', nx, ny, nt);
@@ -242,7 +241,7 @@ for ind = 1:numel(rois)
     rois(ind).dfof_corrected = (rois(ind).activity_corrected - rois(ind).f0) ...
         / rois(ind).f0;  
 end
-
+%%
 % compare to corrected and uncorrected traces
 subplot(1,2,2)
 plot(rois(cellInd).dfof)
