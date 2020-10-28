@@ -214,7 +214,7 @@ for ind = 1:numel(rois)
 end
 \end{lstlisting}
 
-If examine the extracted activity traces, you may notice that the baseline changes on slow time scales. 
+If you examine the extracted activity traces, you may notice that the baseline changes on slow time scales. 
 These fluctuations can arise from a number of sources, including z-drift, bleaching, or loss of objective immersion.
 We can estimate these fluctuations by low-pass filtering the trace or computing a percentile of the fluorescence trace in a sliding window:  
 \begin{lstlisting}[language=Octave]
